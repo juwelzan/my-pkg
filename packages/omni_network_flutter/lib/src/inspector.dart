@@ -1,7 +1,7 @@
 import 'dart:collection';
 
 import 'package:flutter/foundation.dart';
-import 'package:omni_network/omni_network.dart';
+import 'package:omni_network/advanced.dart';
 
 /// Outcome category of an [InspectorEntry].
 enum InspectorStatus {

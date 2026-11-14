@@ -132,3 +132,10 @@
   (interceptors, auth refresh, logging); no timeout unless given; used by
   `omni_network_ws` for Server-Sent Events.
 - Step 15 (core): `NetworkLogRecord.source` (network/cache/revalidated).
+- S1 (simplification): the default import `omni_network.dart` now exposes
+  only app-level names (39, down from ~95; 16 of them are error/state
+  subtypes for `switch`). Low-level and extension APIs moved to
+  `package:omni_network/advanced.dart` (which re-exports the default
+  import); `OmniMock`/`MockTransport` moved to
+  `package:omni_network/testing.dart`. `safeUri` is no longer exported.
+  An analyzer-based test guards the split.

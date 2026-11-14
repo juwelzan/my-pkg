@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'package:meta/meta.dart';
-import 'package:omni_network/omni_network.dart';
+import 'package:omni_network/advanced.dart';
 
 /// One Server-Sent Event.
 @immutable

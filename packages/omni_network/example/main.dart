@@ -4,6 +4,7 @@
 // real baseUrl to talk to a server.
 
 import 'package:omni_network/omni_network.dart';
+import 'package:omni_network/testing.dart';
 
 final class User {
   const User({required this.id, required this.name});

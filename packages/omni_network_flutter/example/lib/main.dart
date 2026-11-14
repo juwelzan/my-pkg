@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:omni_network/omni_network.dart';
+import 'package:omni_network/testing.dart';
 import 'package:omni_network_flutter/omni_network_flutter.dart';
 
 /// A fake backend so the example runs without a server. Replace

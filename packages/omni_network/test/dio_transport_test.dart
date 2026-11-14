@@ -5,7 +5,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:omni_network/omni_network.dart';
+import 'package:omni_network/advanced.dart';
 import 'package:test/test.dart';
 
 /// Real DioTransport against a loopback server: no internet involved.

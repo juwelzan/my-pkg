@@ -1,7 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:omni_network/omni_network.dart';
+import 'package:omni_network/advanced.dart';
+import 'package:omni_network/testing.dart';
 import 'package:test/test.dart';
 
 OmniRawResponse status(int code, [Object? body]) => OmniRawResponse(

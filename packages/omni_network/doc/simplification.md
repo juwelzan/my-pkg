@@ -132,6 +132,118 @@ Then a short **Common tasks** list, with one example each:
 
 Everything else moves to `doc/advanced.md`.
 
+### 3.6 Token management built in (`OmniAuth`)
+
+Today the app must store tokens itself and wire up `BearerAuth`. The
+proposal is a small built-in token manager, so the app only says *how to
+refresh*:
+
+```dart
+final api = OmniNetwork(
+  baseUrl: 'https://api.example.com',
+  enableLogging: true,
+  auth: OmniAuth(
+    // Called only when needed (401, or the token is about to expire).
+    refresh: (tokens, api) async {
+      final r = await api.post<Map<String, dynamic>>('/auth/refresh',
+          body: {'refresh_token': tokens.refreshToken});
+      return Tokens(access: r['access_token'], refresh: r['refresh_token'],
+          expiresIn: Duration(seconds: r['expires_in']));
+    },
+    onLogout: () => router.go('/login'), // refresh failed or logout()
+  ),
+);
+
+// After the login API call:
+await api.auth.login(Tokens(access: a, refresh: r));
+api.auth.isLoggedIn;        // true
+api.auth.changes;           // Stream<AuthState>, e.g. for the router
+await api.auth.logout();    // clears tokens and cache, calls onLogout
+```
+
+How it behaves:
+
+- **Automatic header.** `Authorization: Bearer …` is added to every request.
+- **Refresh on 401.** Single flight (one refresh for many requests), as today.
+- **Refresh before expiry.** When `expiresIn` is known, the token is
+  refreshed shortly before it expires, so the user never sees a 401.
+- **Refresh failure.** Tokens are cleared, `onLogout` runs once, and pending
+  requests fail with `AuthFailure`.
+- **Storage.** `TokenStorage` interface. Tokens live in memory by default.
+  `omni_network_flutter` adds a secure-storage adapter, so tokens survive an
+  app restart with no extra code.
+- **No auth on some calls.** Pass `auth: false` on a call (login, public
+  endpoints).
+- **Static token.** `OmniNetwork(token: () => myToken)` still works for the
+  simplest case.
+- **Advanced.** `BearerAuth` stays in `advanced.dart` for custom setups.
+
+### 3.7 Pretty terminal logs, one `true/false` switch
+
+`enableLogging: true` prints every call in the terminal as one readable
+block: the method, the full URL, status, time, size, and the
+pretty-printed JSON response. Request and response are printed together, so
+concurrent calls never interleave:
+
+```
+┌──────────────────────────────────────────────────────────
+│ GET  https://api.example.com/v1/users/10
+│ ⇢ headers  authorization: ***  accept: application/json
+├──────────────────────────────────────────────────────────
+│ ✔ 200 OK · 142 ms · 1.2 KB
+│ {
+│   "id": 10,
+│   "name": "Ana",
+│   "access_token": "***"
+│ }
+└──────────────────────────────────────────────────────────
+
+┌──────────────────────────────────────────────────────────
+│ POST https://api.example.com/v1/orders
+│ ⇢ body  {"item": 7, "qty": 2}
+├──────────────────────────────────────────────────────────
+│ ✖ 422 Unprocessable Entity · 88 ms
+│ {
+│   "error": "qty must be ≤ 1"
+│ }
+└──────────────────────────────────────────────────────────
+
+┌──────────────────────────────────────────────────────────
+│ GET  https://api.example.com/v1/feed
+├──────────────────────────────────────────────────────────
+│ ✖ ConnectionFailure: no internet · 3004 ms
+└──────────────────────────────────────────────────────────
+```
+
+The same block also reports:
+
+- a response served from the cache (`✔ 200 · cache`);
+- a retry attempt (`↻ retry 2/3`);
+- a token refresh (`🔑 token refreshed`).
+
+Rules:
+
+- **One switch.** `enableLogging: true` turns logging on and `false` turns
+  it off. The default is `false`.
+- **Release builds.** Logging is turned off automatically in release
+  builds, even when `true` is set, so logs never leak from a store build.
+  `logInRelease: true` overrides this.
+- **Secrets.** Always shown as `***`; this cannot be switched off.
+- **Colours.** Green for 2xx, yellow for 4xx, red for 5xx and failures,
+  when the terminal supports colours. Plain text otherwise.
+- **Long and binary bodies.** Long bodies are cut after 30 lines, with
+  `… 120 more lines` shown. Binary and file bodies show only their size.
+- **Optional extras.** All of these have sensible defaults:
+
+  ```dart
+  logOptions: LogOptions(
+    headers: false,     // default: false
+    requestBody: true,  // default: true
+    maxLines: 30,
+    colors: true,
+  )
+  ```
+
 ## 4. What does **not** change
 
 - **Features.** Auth refresh, retry safety, cache, the offline queue,
@@ -148,7 +260,9 @@ Everything else moves to `doc/advanced.md`.
 | S1 | Split exports into `omni_network.dart` / `advanced.dart` / `testing.dart`; update internal imports | Every existing test still passes. A new test checks that the simple import does not expose low-level names |
 | S2 | Add per-call options to the verbs; add `getResponse` etc.; remove the builder; move `sendRaw` | Option tests |
 | S3 | `token:` shortcut; `isOffline` / `statusCode` / `isTimeout` getters | Unit tests |
-| S4 | README rewrite + `doc/advanced.md`; update the examples, generated code and sibling packages | README snippets compiled as before; examples run |
+| S4 | `OmniAuth` + `Tokens` + `TokenStorage` (memory), `api.auth.login/logout/changes`, proactive refresh, `auth: false` per call | Refresh before expiry (fake clock), 401 refresh, logout clears tokens + cache, onLogout once |
+| S5 | Pretty log printer + `LogOptions` + release auto-off | Snapshot tests of printed blocks (plain and coloured), secrets never printed, off ⇒ nothing printed, concurrent calls not interleaved |
+| S6 | README rewrite + `doc/advanced.md`; update examples, generated code, sibling packages; secure-storage token adapter in `omni_network_flutter` | README snippets compiled; examples run |
 
 ## 6. Questions for you
 

@@ -1,4 +1,5 @@
 import 'package:omni_network/omni_network.dart';
+import 'package:omni_network/testing.dart';
 import 'package:test/test.dart';
 
 import 'golden/petstore.g.dart';

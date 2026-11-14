@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:omni_network/omni_network.dart';
+import 'package:omni_network/advanced.dart';
 import 'package:omni_network_flutter/omni_network_flutter.dart';
 import 'package:omni_network_flutter_example/main.dart';
 

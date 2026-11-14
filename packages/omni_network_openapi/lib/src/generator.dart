@@ -183,7 +183,7 @@ final class _Generator {
       ..writeln()
       ..writeln('// ignore_for_file: type=lint')
       ..writeln()
-      ..writeln("import 'package:omni_network/omni_network.dart';")
+      ..writeln("import 'package:omni_network/advanced.dart';")
       ..writeln();
     return GenerationResult(
       '$header$_models$endpoints'.replaceAll(RegExp(r'\n{3,}'), '\n\n'),

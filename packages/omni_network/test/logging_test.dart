@@ -2,7 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:omni_network/omni_network.dart';
+import 'package:omni_network/advanced.dart';
+import 'package:omni_network/testing.dart';
 import 'package:test/test.dart';
 
 final class ListSink implements LogSink {

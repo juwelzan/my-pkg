@@ -5,7 +5,7 @@
 
 // ignore_for_file: type=lint
 
-import 'package:omni_network/omni_network.dart';
+import 'package:omni_network/advanced.dart';
 
 /// Lifecycle status.
 enum PetStatus {

@@ -51,6 +51,18 @@ dependencies:
     path: packages/omni_network   # or a git dependency
 ```
 
+Three imports, so autocomplete only shows what you need:
+
+```dart
+import 'package:omni_network/omni_network.dart'; // apps: client, errors, auth, retry, cache, paging, state
+import 'package:omni_network/advanced.dart';     // + transports, stores, adapters, log sinks, Redactor,
+                                                 //   OfflineQueue, CircuitBreaker, streaming, cURL, registry
+import 'package:omni_network/testing.dart';      // OmniMock, MockResponse, MockTransport
+```
+
+The sections below say which import an API needs whenever it is not the
+default one.
+
 ## Requests and typed responses
 
 ```dart
@@ -95,6 +107,8 @@ switch (await api.get<User>('/me', decoder: User.fromJson).asResult()) {
 ```
 
 ## Logging and redaction
+
+`Redactor` and `LogSink` come from `advanced.dart`.
 
 One switch, off by default:
 
@@ -281,6 +295,8 @@ else.
 
 ## Offline queue
 
+Needs `advanced.dart`.
+
 ```dart
 final queue = OfflineQueue(client: api);          // nothing is queued implicitly
 final result = await queue.sendOrQueue(
@@ -323,6 +339,8 @@ final imported = parseCurl(copiedFromBrowser).request;
 spec.
 
 ## Testing with OmniMock
+
+Needs `testing.dart`.
 
 ```dart
 final mock = OmniMock(basePath: '/v1')
