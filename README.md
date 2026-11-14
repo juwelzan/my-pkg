@@ -1,39 +1,434 @@
-<!--
-This README describes the package. If you publish this package to pub.dev,
-this README's contents appear on the landing page for your package.
+# OmniRoute
 
-For information about how to write a good package README, see the guide for
-[writing package pages](https://dart.dev/tools/pub/writing-package-pages).
+Simple screens, routes and Bloc scoping for Flutter — built **on**
+[go_router](https://pub.dev/packages/go_router) and
+[flutter_bloc](https://pub.dev/packages/flutter_bloc), not instead of them.
 
-For general information about developing packages, see the Dart guide for
-[creating packages](https://dart.dev/guides/libraries/create-packages)
-and the Flutter guide for
-[developing packages and plugins](https://flutter.dev/to/develop-packages).
--->
+OmniRoute has no navigation engine and no state management of its own.
+`OmniPage` *is* a `GoRoute`, the router *is* a `GoRouter`, and Blocs live in
+plain `BlocProvider`s. OmniRoute removes the wiring between them.
 
-TODO: Put a short description of the package here that helps potential users
-know whether this package might be useful for them.
-
-## Features
-
-TODO: List what your package can do. Maybe include images, gifs, or videos.
-
-## Getting started
-
-TODO: List prerequisites and provide or point to information on how to
-start using the package.
-
-## Usage
-
-TODO: Include short and useful examples for package users. Add longer examples
-to `/example` folder.
+## 1. Introduction
 
 ```dart
-const like = 'sample';
+class StudentScreen extends OmniStatelessWidget {
+  const StudentScreen({super.key});
+
+  @override
+  String get screenName => 'Students';
+
+  @override
+  List<Provide> get provide => const [Provide<StudentBloc>()];
+
+  @override
+  Widget build(BuildContext context) => const StudentList();
+}
 ```
 
-## Additional information
+The `StudentBloc` is created when the page opens, kept across rebuilds and
+pushes, and closed when the page is popped or replaced.
 
-TODO: Tell users more about the package: where to find more information, how to
-contribute to the package, how to file issues, what response they can expect
-from the package authors, and more.
+## 2. Features
+
+- `OmniStatelessWidget` / `OmniStatefulWidget` with the same API
+- One `OmniApp` creating a single `GoRouter`
+- Global Blocs and screen-scoped Blocs, single or multiple, or existing instances
+- Typed navigation (`OmniRoute.to<StudentDetailScreen>(...)`) plus all go_router navigation
+- Typed route parameters, nested routes, shell and stateful shell routes
+- Guards (sync or async, app-wide or per route) that re-run when a Bloc changes
+- Clean web URLs, browser titles, trailing-slash cleanup
+- Desktop back shortcuts and mouse back button
+- Validated configuration with clear errors
+- Leak-tracked tests; profile-mode benchmark against plain go_router
+
+## 3. Installation
+
+```yaml
+dependencies:
+  omni_route: ^0.1.0
+  flutter_bloc: ^9.1.1   # for context.read / BlocBuilder in your code
+  go_router: ^18.1.4     # only if you use go_router types directly
+```
+
+Requires Dart ≥ 3.12 and Flutter ≥ 3.44 (go_router 18's minimum).
+
+## 4. Quick start
+
+```dart
+import 'package:flutter/material.dart';
+import 'package:omni_route/omni_route.dart';
+
+void main() {
+  OmniRoute.usePathUrls(); // web: /students instead of /#/students
+  runApp(const MyApp());
+}
+
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) => OmniApp(
+        initialRoute: '/students',
+        blocs: [
+          OmniBloc<AuthBloc>((_) => AuthBloc(), global: true),
+          OmniBloc<StudentBloc>((ctx) => StudentBloc(ctx.read<StudentRepo>())),
+        ],
+        routes: [
+          OmniPage('/students', (_) => const StudentScreen(), routes: [
+            OmniPage(':id', (p) => StudentDetailScreen(id: p.pathInt('id'))),
+          ]),
+        ],
+        builder: (context, router) => MaterialApp.router(routerConfig: router),
+      );
+}
+```
+
+## 5. Screen creation
+
+A screen is a widget with a `screenName` (required, used for logs and the
+browser title) and optionally a list of Blocs. Its URL is **not** part of
+the screen: it is declared once, in the route table (§8). That way screens
+that need constructor arguments (`StudentDetailScreen(id: 101)`) work the
+same way as screens that don't.
+
+| Member | Required | Meaning |
+|---|---|---|
+| `screenName` | yes | Human-readable name; must not be empty |
+| `title` | no | Browser/app-switcher title, defaults to `screenName` |
+| `provide` | no | Blocs for this screen (§10–12) |
+| `name` | — | Runtime class name, for debugging only (not stable under obfuscation) |
+| `metadata` | — | `OmniScreenMetadata` (identity is the Dart `Type`) |
+
+## 6. Stateless screen
+
+```dart
+class ProfileScreen extends OmniStatelessWidget {
+  const ProfileScreen({super.key});
+
+  @override
+  String get screenName => 'Profile';
+
+  @override
+  Widget build(BuildContext context) =>
+      Scaffold(appBar: AppBar(title: Text(screenName)));
+}
+```
+
+## 7. Stateful screen
+
+```dart
+class DashboardScreen extends OmniStatefulWidget {
+  const DashboardScreen({super.key});
+
+  @override
+  String get screenName => 'Dashboard';
+
+  @override
+  State<DashboardScreen> createState() => _DashboardState();
+}
+
+class _DashboardState extends OmniState<DashboardScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Screen Blocs already exist here: context.read<StatsBloc>()
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      Text('${widget.screenName} at ${routeState.uri}');
+}
+```
+
+`OmniState` is a normal `State`: `initState`, `didChangeDependencies`,
+`didUpdateWidget` and `dispose` behave exactly as in Flutter. It adds
+`metadata` and `routeState` (the `GoRouterState`).
+
+## 8. Screen registration
+
+```dart
+routes: [
+  OmniPage('/dashboard', (_) => const DashboardScreen()),
+  OmniPage('/students', (_) => const StudentScreen(), name: 'students', routes: [
+    OmniPage(':id', (p) => StudentDetailScreen(id: p.pathInt('id'))),
+  ]),
+  GoRoute(path: '/legacy', builder: (_, _) => const LegacyPage()), // raw go_router works too
+]
+```
+
+- Top-level paths start with `/`; child paths are relative (`':id'`, `'profile'`).
+- Paths must be lowercase and URL-safe, with no `#`, `?`, `//` or trailing `/`.
+- Duplicate paths, including `/a/:id` vs `/a/:slug`, are rejected at startup.
+- The same screen may be used by several routes.
+
+## 9. Global Bloc
+
+```dart
+blocs: [
+  OmniBloc<AuthBloc>((_) => AuthBloc(), global: true, lazy: false),
+  OmniBloc<ThemeBloc>((_) => ThemeBloc(), global: true),
+]
+```
+
+Global Blocs are created once above the router, are available everywhere
+(including in `builder`, e.g. to switch themes), and are closed only when
+`OmniApp` is disposed. A screen cannot `Provide` a global Bloc again; that is
+reported as an error.
+
+## 10. Screen Bloc
+
+Register a factory once, then name the type on the screen:
+
+```dart
+// OmniApp
+blocs: [OmniBloc<StudentBloc>((ctx) => StudentBloc(ctx.read<StudentRepo>()))],
+
+// Screen
+@override
+List<Provide> get provide => const [Provide<StudentBloc>()];
+```
+
+Factories receive a `BuildContext`, so dependencies come from
+`RepositoryProvider`s or global Blocs above.
+
+## 11. Single Bloc
+
+```dart
+@override
+List<Provide> get provide => const [Provide<AuthBloc>()];
+```
+
+The type parameter must be a `Bloc`; Cubits and other types do not compile.
+
+## 12. Multiple Blocs
+
+```dart
+@override
+List<Provide> get provide => [
+      Provide<StudentDetailBloc>.create((_) => StudentDetailBloc(id)), // needs a parameter
+      const Provide<AttendanceBloc>(),                                 // from the registry
+      Provide.value(existingBloc),                                     // not owned
+    ];
+```
+
+| Form | Created by | Closed by OmniRoute |
+|---|---|---|
+| `Provide<B>()` | registered `OmniBloc<B>` factory | yes, when the page is removed |
+| `Provide<B>.create(fn)` | `fn` | yes |
+| `Provide.value(bloc)` | you | **never** |
+
+The same type twice in one list is an error.
+
+## 13. Navigation
+
+```dart
+OmniRoute.go('/students/101?tab=info');       // replace the stack (also "clear and go")
+OmniRoute.push('/students/101');              // push
+final saved = await OmniRoute.push<bool>('/students/101/edit');
+OmniRoute.pop(true);                          // pop with a result
+OmniRoute.replace('/login');                  // replace the top page
+OmniRoute.goNamed('students');
+OmniRoute.to<StudentDetailScreen>(path: {'id': '101'}, query: {'tab': 'info'});
+OmniRoute.pushTo<StudentDetailScreen, bool>(path: {'id': '101'});
+OmniRoute.location;                           // current Uri
+OmniRoute.router;                             // the GoRouter, for anything else
+```
+
+`context.go(...)`, `context.push(...)` and all other go_router APIs keep working.
+
+## 14. Dynamic routes
+
+```dart
+OmniPage('/attendance/daily', (p) => AttendanceScreen(
+  classNo: p.queryInt('class'),   // ?class=10
+  section: p.query('section'),    // &section=A
+));
+```
+
+`OmniParams`: `path`, `pathInt`, `query`, `queryInt`, `queryAll`,
+`extra<T>()`, `uri`, `state`. Values are already URL-decoded. An invalid
+value (e.g. `/students/abc` for `pathInt`) shows the not-found page instead
+of crashing.
+
+## 15. Nested routes
+
+```dart
+OmniPage('/settings', (_) => const SettingsScreen(), routes: [
+  OmniPage('profile', (_) => const ProfileScreen()),   // /settings/profile
+]),
+```
+
+Going to `/settings/profile` builds both pages; back returns to Settings.
+
+## 16. Shell routes
+
+```dart
+OmniShell(
+  provide: const [Provide<InboxBloc>()],             // lives while the shell is shown
+  builder: (context, state, child) => AppFrame(child: child),
+  routes: [OmniPage('/inbox', (_) => const InboxScreen())],
+),
+
+OmniStatefulShell(
+  builder: (context, state, shell) => Scaffold(
+    body: shell,
+    bottomNavigationBar: NavigationBar(
+      selectedIndex: shell.currentIndex,
+      onDestinationSelected: shell.goBranch,
+      destinations: const [/* ... */],
+    ),
+  ),
+  branches: [
+    StatefulShellBranch(routes: [OmniPage('/dashboard', (_) => const DashboardScreen())]),
+    StatefulShellBranch(routes: [OmniPage('/students', (_) => const StudentScreen())]),
+  ],
+),
+```
+
+`OmniStatefulShell` uses go_router's `StatefulShellRoute.indexedStack`: each
+tab keeps its own stack, widget state and Blocs while other tabs are shown.
+
+## 17. Authentication guard
+
+```dart
+class AuthGuard extends OmniGuard {
+  const AuthGuard();
+
+  @override
+  Stream<Object?> refresh(BuildContext context) =>
+      context.read<AuthBloc>().stream;          // re-check when auth changes
+
+  @override
+  String? redirect(BuildContext context, GoRouterState state) {
+    final loggedIn = context.read<AuthBloc>().state.isLoggedIn;
+    final atLogin = state.matchedLocation == '/login';
+    if (!loggedIn && !atLogin) {
+      return Uri(path: '/login', queryParameters: {'from': state.uri.toString()}).toString();
+    }
+    if (loggedIn && atLogin) return state.uri.queryParameters['from'] ?? '/';
+    return null;
+  }
+}
+
+OmniApp(guards: const [AuthGuard()], ...);
+OmniPage('/admin', (_) => const AdminScreen(),
+    guards: [OmniGuard.fn((c, s) => c.read<AuthBloc>().state.isAdmin ? null : '/denied')]);
+```
+
+- Guards run in order; the first non-null redirect wins. They may be `async`.
+- Sync guards stay synchronous, so they add no extra frame of delay.
+- A redirect to the current location is ignored; longer loops are stopped by
+  GoRouter's `redirectLimit` and shown on the error page.
+- Read state, don't call APIs: guards run on every navigation.
+
+## 18. Web path URLs
+
+```dart
+void main() {
+  OmniRoute.usePathUrls();
+  runApp(const MyApp());
+}
+```
+
+You get `https://example.com/students/101`, browser back and forward,
+refresh, direct access, browser tab titles from `title`, and
+`/students/` → `/students`.
+
+**Your server must return `index.html` for unknown paths.** Nginx:
+
+```nginx
+location / { try_files $uri $uri/ /index.html; }
+```
+
+Apache, Firebase, Netlify, Vercel, GitHub Pages and subdirectory deploys
+(`flutter build web --base-href /myapp/`): see [doc/web.md](doc/web.md).
+
+## 19. Deep linking
+
+GoRouter receives links from the OS; OmniRoute's guards run on them like on
+any navigation. You need platform setup:
+
+- **Android App Links:** intent-filter with `android:autoVerify="true"` and
+  `/.well-known/assetlinks.json`
+- **iOS Universal Links:** Associated Domains `applinks:example.com` and
+  `/.well-known/apple-app-site-association`
+
+Full steps and test commands: [doc/platforms.md](doc/platforms.md#deep-links).
+
+## 20. Platform configuration
+
+| Platform | Back | Deep links |
+|---|---|---|
+| Android | system back, `PopScope` | App Links / custom scheme (manifest) |
+| iOS | edge swipe-back | Universal Links / custom scheme |
+| Web | browser back/forward | any URL + server fallback |
+| macOS | Cmd+[, Cmd+←, mouse back | URL scheme (Info.plist) |
+| Windows / Linux | Alt+←, mouse back | needs OS registration + plugin |
+
+```dart
+OmniApp(
+  pageType: OmniPages.material,  // default; or OmniPages.cupertino / OmniPages.none
+  desktopBack: true,             // default
+  escapeGoesBack: false,         // default
+  ...
+)
+```
+
+What was checked on which platform: [doc/platforms.md](doc/platforms.md).
+
+## 21. Lifecycle management
+
+| Resource | Owner | Released |
+|---|---|---|
+| `GoRouter` | `OmniApp` | when `OmniApp` is disposed |
+| Global Bloc | app scope | when `OmniApp` is disposed |
+| Screen Bloc (`Provide<B>()` / `.create`) | its page | when the page is popped or replaced |
+| `Provide.value` Bloc | you | never by OmniRoute |
+| Shell Bloc | the shell | when the shell is no longer shown |
+| Guard refresh subscriptions | `OmniApp` | when `OmniApp` is disposed |
+
+- A rebuild never recreates a Bloc; a covered page keeps its Blocs.
+- Each Bloc is closed exactly once.
+- `OmniApp` reads its configuration once. After changing routes or Blocs, do a
+  hot **restart**, as with a `GoRouter` held in state.
+
+## 22. Performance considerations
+
+- Startup validation and indexing run once; route matching is go_router's.
+- In a profile-mode benchmark against the same app written with plain
+  go_router and BlocProvider, the differences were within run-to-run noise
+  ([doc/performance.md](doc/performance.md)).
+- All tests run with Flutter's leak tracker.
+- Keep guards cheap; put data needed after a web refresh in the URL, not in
+  `extra`.
+
+## 23. Troubleshooting
+
+| Message / symptom | Fix |
+|---|---|
+| `missingBlocFactory: No factory registered for X` | add `OmniBloc<X>(...)` to `OmniApp(blocs:)` |
+| `unsupportedConfiguration: X is global` | remove `Provide<X>()`; use `context.read<X>()` |
+| `invalidRoutePath ... must be lowercase` | use lowercase path segments |
+| `duplicateRoute` | two routes match the same URLs |
+| `notInitialized: No OmniApp is mounted` | navigate after `OmniApp` is built, or use `context.go` |
+| `X is used by several routes` | navigate by path or `goNamed` |
+| 404 after refreshing on the web | configure the server fallback (§18) |
+| No page transition on a raw `GoRoute` | use `OmniPage` or give it a `pageBuilder` |
+| Route changes ignored after hot reload | hot restart |
+
+## 24. Complete example
+
+[`example/lib/main.dart`](example/lib/main.dart) is a full app: login with an
+auth guard, dashboard, student list, student details (multiple Blocs, one
+built from a route parameter), settings with nested profile, global auth and
+theme Blocs, a bottom-tab stateful shell, and path URLs.
+
+```bash
+cd example
+flutter run -d chrome   # or macos, an iOS simulator, an Android device
+flutter test            # full flow test
+```
+
+## License
+
+MIT — see [LICENSE](LICENSE).

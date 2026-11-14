@@ -6,6 +6,7 @@ import 'omni_screen.dart';
 
 /// A [StatefulWidget] screen with OmniRoute metadata. Pair with [OmniState].
 abstract class OmniStatefulWidget extends StatefulWidget with OmniScreen {
+  /// Creates a stateful screen.
   const OmniStatefulWidget({super.key});
 
   @override

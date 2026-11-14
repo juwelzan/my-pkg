@@ -14,6 +14,7 @@ import 'omni_screen.dart';
 /// }
 /// ```
 abstract class OmniStatelessWidget extends StatelessWidget with OmniScreen {
+  /// Creates a stateless screen.
   const OmniStatelessWidget({super.key});
 
   @override

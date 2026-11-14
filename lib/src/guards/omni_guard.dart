@@ -24,6 +24,7 @@ import 'package:go_router/go_router.dart';
 /// }
 /// ```
 abstract class OmniGuard {
+  /// Constant constructor for subclasses.
   const OmniGuard();
 
   /// Guard from a function.
@@ -32,6 +33,7 @@ abstract class OmniGuard {
     Stream<Object?>? Function(BuildContext)? refresh,
   }) = _FnGuard;
 
+  /// Location to send the user to, or `null` to let the navigation through.
   FutureOr<String?> redirect(BuildContext context, GoRouterState state);
 
   /// Stream whose events re-run redirects (e.g. an auth Bloc's stream).

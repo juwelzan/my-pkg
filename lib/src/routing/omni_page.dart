@@ -46,6 +46,9 @@ abstract final class OmniPages {
 /// ```
 /// Top-level paths start with `/`; child paths are relative.
 class OmniPage<S extends OmniScreen> extends GoRoute {
+  /// A route at [path] showing the screen built by [screenBuilder].
+  ///
+  /// [guards] run before this route is shown; [routes] are nested routes.
   factory OmniPage(
     String path,
     OmniScreenBuilder<S> screenBuilder, {
@@ -88,11 +91,13 @@ class OmniPage<S extends OmniScreen> extends GoRoute {
         pageBuilder: pageBuilder,
       );
 
+  /// Builds the screen from the route parameters.
   final OmniScreenBuilder<S> screenBuilder;
 
   /// Overrides `OmniApp(pageType:)` for this route.
   final OmniPageType? pageType;
 
+  /// The screen type; used by `OmniRoute.to<S>()`.
   Type get screenType => S;
 
   /// Wraps the screen with its Bloc scope. One Page per route match (keyed

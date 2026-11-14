@@ -10,6 +10,7 @@ import '../errors/omni_route_exception.dart';
 /// from `runtimeType.toString()` and must only be used for logs.
 @immutable
 class OmniScreenMetadata {
+  /// Creates screen metadata.
   const OmniScreenMetadata({
     required this.type,
     required this.screenName,
@@ -17,9 +18,16 @@ class OmniScreenMetadata {
     required this.debugName,
   });
 
+  /// The screen's Dart type: its stable identity.
   final Type type;
+
+  /// See [OmniScreen.screenName].
   final String screenName;
+
+  /// See [OmniScreen.title].
   final String title;
+
+  /// Runtime class name, for logs only.
   final String debugName;
 
   @override
@@ -51,6 +59,7 @@ mixin OmniScreen on Widget {
   /// Runtime class name, for debugging only. Not stable under obfuscation.
   String get name => runtimeType.toString();
 
+  /// This screen's metadata.
   OmniScreenMetadata get metadata => OmniScreenMetadata(
     type: runtimeType,
     screenName: screenName,

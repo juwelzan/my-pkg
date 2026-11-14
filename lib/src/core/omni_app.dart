@@ -27,6 +27,7 @@ typedef OmniAppBuilder = Widget Function(BuildContext context, GoRouter router);
 /// Configuration is read once in `initState`; changing it later (including
 /// hot reload) needs a hot restart, the same as a GoRouter kept in state.
 class OmniApp extends StatefulWidget {
+  /// Creates the root of an OmniRoute app.
   const OmniApp({
     super.key,
     required this.routes,
@@ -49,8 +50,14 @@ class OmniApp extends StatefulWidget {
 
   /// [OmniPage]s and any raw go_router [RouteBase]s.
   final List<RouteBase> routes;
+
+  /// Builds your app widget (e.g. `MaterialApp.router`) around the router.
   final OmniAppBuilder builder;
+
+  /// Bloc factories; entries with `global: true` are created app-wide.
   final List<OmniBloc> blocs;
+
+  /// Location shown first when the platform gives none (e.g. no deep link).
   final String initialRoute;
 
   /// Page for unknown URLs and invalid route parameters.
@@ -59,12 +66,22 @@ class OmniApp extends StatefulWidget {
   /// App-wide guards, run in order before [redirect] on every navigation.
   final List<OmniGuard> guards;
 
-  // Passed straight to GoRouter.
+  /// Extra GoRouter redirect, run after [guards].
   final GoRouterRedirect? redirect;
+
+  /// Maximum redirects per navigation before GoRouter reports a loop.
   final int redirectLimit;
+
+  /// Re-runs redirects when it notifies (in addition to guard streams).
   final Listenable? refreshListenable;
+
+  /// Key of the root navigator.
   final GlobalKey<NavigatorState>? navigatorKey;
+
+  /// Observers of the root navigator.
   final List<NavigatorObserver>? observers;
+
+  /// Log GoRouter's route matching (debug builds).
   final bool debugLogDiagnostics;
 
   /// Set the browser tab title from each screen's `title` (default

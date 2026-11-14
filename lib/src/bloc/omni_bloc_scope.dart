@@ -7,15 +7,20 @@ import 'omni_bloc.dart';
 /// Makes [registry] and its global Blocs available below. `OmniApp` inserts
 /// this once above the router; it is public for tests and custom setups.
 class OmniGlobalBlocScope extends StatelessWidget {
+  /// Provides [registry] and its global Blocs to [child].
   const OmniGlobalBlocScope({
     super.key,
     required this.registry,
     required this.child,
   });
 
+  /// Factories for all Blocs of the app.
   final OmniBlocRegistry registry;
+
+  /// The widget below this scope.
   final Widget child;
 
+  /// The nearest registry, or [OmniBlocRegistry.empty].
   static OmniBlocRegistry registryOf(BuildContext context) =>
       context.dependOnInheritedWidgetOfExactType<_RegistryScope>()?.registry ??
       OmniBlocRegistry.empty;
@@ -43,9 +48,13 @@ class _RegistryScope extends InheritedWidget {
 /// Blocs are created once per element: rebuilds do not recreate them, and
 /// owned Blocs are closed by flutter_bloc when this widget is unmounted.
 class OmniBlocScope extends StatelessWidget {
+  /// Provides the Blocs in [provide] to [child].
   const OmniBlocScope({super.key, required this.provide, required this.child});
 
+  /// The Blocs to provide; each type at most once.
   final List<Provide> provide;
+
+  /// The widget below this scope.
   final Widget child;
 
   @override

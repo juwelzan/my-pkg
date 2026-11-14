@@ -1,4 +1,8 @@
-## 0.1.0-dev.1
+## 0.1.0
+
+First release.
+
+### Development history
 
 - Phase 2: `OmniStatelessWidget`, `OmniStatefulWidget`, `OmniState`, `OmniScreenMetadata`, `OmniRouteException`, route path validation.
 - Phase 3: `OmniBloc` factory registry (global/screen), `Provide` / `Provide.create` / `Provide.value`, `OmniGlobalBlocScope`, `OmniBlocScope`, `provide` on screens.
@@ -6,3 +10,5 @@
 - Phase 5: `OmniShell`, `OmniStatefulShell` (with shell-scoped Blocs), `OmniGuard` (app-wide + per-route, sync/async, Bloc-stream refresh, self-redirect ignored, loops caught by GoRouter), deep-link test.
 - Phase 6: `OmniRoute.usePathUrls()`, trailing-slash normalization, browser title from screen `title` (follows pop and tab switches), `OmniApp(setTitles:)`, web hosting docs (`doc/web.md`), example app.
 - Phase 7: leak tracking on all tests (2 error-path leaks fixed), long-session/rebuild/tab-switch/large-registry tests, profile benchmark vs raw GoRouter (`example/benchmark`), report in `doc/performance.md`.
+- Phase 8: `OmniApp(pageType:)` / `OmniPage(pageType:)` with `OmniPages.material|cupertino|none`, desktop back (Alt+←, Cmd+[, mouse back, optional Escape), per-platform tests, platform guide (`doc/platforms.md`).
+- Phase 9: README, complete example + flow test, API docs for all public members, LICENSE (MIT).

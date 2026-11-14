@@ -33,12 +33,14 @@ abstract final class OmniRoute {
         hint: 'Navigate after OmniApp is built, or use context.go(...).',
       ));
 
+  /// Connects the helpers to [r]. Called by OmniApp.
   @internal
   static void attach(GoRouter r, OmniRouteRegistry reg) {
     _router = r;
     _registry = reg;
   }
 
+  /// Disconnects [r] if it is the current router.
   @internal
   static void detach(GoRouter r) {
     if (identical(_router, r)) _router = _registry = null;
@@ -59,10 +61,13 @@ abstract final class OmniRoute {
   static void replace(String location, {Object? extra}) =>
       router.pushReplacement(location, extra: extra);
 
+  /// Pop the top page, completing its [push] future with [result].
   static void pop<T extends Object?>([T? result]) => router.pop<T>(result);
 
+  /// Whether there is a page to pop.
   static bool canPop() => router.canPop();
 
+  /// [go] to the route named [name].
   static void goNamed(
     String name, {
     Map<String, String> path = const {},
@@ -75,6 +80,7 @@ abstract final class OmniRoute {
     extra: extra,
   );
 
+  /// [push] the route named [name].
   static Future<T?> pushNamed<T extends Object?>(
     String name, {
     Map<String, String> path = const {},

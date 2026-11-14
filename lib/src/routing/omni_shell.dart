@@ -6,6 +6,7 @@ import '../bloc/omni_bloc_scope.dart';
 /// A [ShellRoute] (shared layout around child routes) with optional Blocs
 /// that live as long as the shell is shown.
 class OmniShell extends ShellRoute {
+  /// A shell around [routes]; [provide] Blocs live as long as the shell.
   OmniShell({
     required ShellRouteBuilder builder,
     required super.routes,
@@ -33,6 +34,7 @@ class OmniShell extends ShellRoute {
 /// ```
 /// Switch tabs with `shell.goBranch(index)` (go_router API).
 class OmniStatefulShell extends StatefulShellRoute {
+  /// Tabs from [branches]; [provide] Blocs live as long as the shell.
   OmniStatefulShell({
     required StatefulShellRouteBuilder builder,
     required super.branches,

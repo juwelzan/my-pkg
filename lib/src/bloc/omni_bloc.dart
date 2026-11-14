@@ -17,12 +17,19 @@ typedef OmniBlocCreate<B extends AnyBloc> = B Function(BuildContext context);
 /// factory is used by screens that declare `Provide<B>()`.
 @immutable
 class OmniBloc<B extends AnyBloc> {
+  /// Registers [create] as the factory for [B].
   const OmniBloc(this.create, {this.global = false, this.lazy = true});
 
+  /// Creates a new [B]. Called once per owning scope.
   final OmniBlocCreate<B> create;
+
+  /// Whether one app-wide instance is created above the router.
   final bool global;
+
+  /// Whether creation waits until the Bloc is first read.
   final bool lazy;
 
+  /// The Bloc type this entry creates.
   Type get type => B;
 
   BlocProvider<B> _provider(Widget? child) =>
@@ -32,6 +39,9 @@ class OmniBloc<B extends AnyBloc> {
 /// Immutable lookup of [OmniBloc] factories by Bloc type.
 @immutable
 class OmniBlocRegistry {
+  /// Indexes [blocs] by type.
+  ///
+  /// Throws [OmniRouteException] if a type is registered twice.
   factory OmniBlocRegistry(Iterable<OmniBloc> blocs) {
     final map = <Type, OmniBloc>{};
     for (final b in blocs) {
@@ -48,12 +58,17 @@ class OmniBlocRegistry {
 
   const OmniBlocRegistry._(this._factories);
 
+  /// A registry with no factories.
   static const empty = OmniBlocRegistry._({});
 
   final Map<Type, OmniBloc> _factories;
 
+  /// The entries marked `global: true`.
   Iterable<OmniBloc> get globals => _factories.values.where((b) => b.global);
 
+  /// The factory for [B].
+  ///
+  /// Throws [OmniRouteException] if [B] is missing or global.
   OmniBloc<B> factoryFor<B extends AnyBloc>() {
     final f = _factories[B];
     if (f == null) {
@@ -103,11 +118,17 @@ class Provide<B extends AnyBloc> {
 
   final OmniBlocCreate<B>? _create;
   final B? _value;
+
+  /// Whether creation waits until the Bloc is first read.
   final bool lazy;
 
+  /// The Bloc type provided.
   Type get type => B;
+
+  /// Whether OmniRoute closes this Bloc (false for [Provide.value]).
   bool get isOwned => _value == null;
 
+  /// Builds the flutter_bloc provider for this entry.
   @internal
   BlocProvider<B> toProvider(OmniBlocRegistry registry) {
     final value = _value;

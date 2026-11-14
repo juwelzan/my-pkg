@@ -7,10 +7,13 @@ import '../errors/omni_route_exception.dart';
 /// and `extra`. Wraps [GoRouterState]; values are already URL-decoded.
 @immutable
 class OmniParams {
+  /// Wraps [state].
   const OmniParams(this.state);
 
+  /// The underlying go_router state.
   final GoRouterState state;
 
+  /// The full location, including query.
   Uri get uri => state.uri;
 
   /// Required path parameter, e.g. `id` in `/students/:id`.
@@ -20,6 +23,7 @@ class OmniParams {
     return v;
   }
 
+  /// Path parameter parsed as int; an invalid value shows the not-found page.
   int pathInt(String name) => _int(name, path(name));
 
   /// Optional query parameter (`?class=10`).
