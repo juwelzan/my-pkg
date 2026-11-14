@@ -1,5 +1,7 @@
 import 'package:meta/meta.dart';
 
+import '../cache/omni_cache.dart' show ResponseSource;
+
 /// What a [NetworkLogRecord] describes.
 enum NetworkLogKind {
   /// A request is about to be sent.
@@ -27,6 +29,7 @@ final class NetworkLogRecord {
     this.statusCode,
     this.duration,
     this.error,
+    this.source,
   });
 
   /// Kind of event.
@@ -55,6 +58,9 @@ final class NetworkLogRecord {
 
   /// Failure type and message ([NetworkLogKind.error] only).
   final String? error;
+
+  /// Where the response came from ([NetworkLogKind.response] only).
+  final ResponseSource? source;
 
   /// Human-readable, multi-line rendering.
   final String message;

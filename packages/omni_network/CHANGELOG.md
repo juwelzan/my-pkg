@@ -127,3 +127,8 @@
   `failureRate`, `calls`/`callsTo`/`unmatched`/`resetCalls`. Strict by
   default: an unmatched request fails with a `RequestFailure` naming it.
   Downloads and uploads work through it.
+- Step 14 (core): `OmniNetwork.openStream(request)` → `OmniStreamResponse`
+  (status, headers, body stream, `cancel`) through the full pipeline
+  (interceptors, auth refresh, logging); no timeout unless given; used by
+  `omni_network_ws` for Server-Sent Events.
+- Step 15 (core): `NetworkLogRecord.source` (network/cache/revalidated).

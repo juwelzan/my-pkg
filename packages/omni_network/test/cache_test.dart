@@ -360,6 +360,7 @@ void main() {
     final m = await api.get<Map<String, dynamic>>('/a');
     expect(m['v'], 1);
     expect(sink.out, contains(', cache)'));
+    expect(sink.records.last.source, ResponseSource.cache);
   });
 
   group('MemoryCacheStore', () {
@@ -489,7 +490,11 @@ Uint8List Uint8ListOf(int n) => Uint8List(n);
 
 final class _Sink implements LogSink {
   final b = StringBuffer();
+  final records = <NetworkLogRecord>[];
   String get out => '$b';
   @override
-  void log(NetworkLogRecord r) => b.writeln(r.message);
+  void log(NetworkLogRecord r) {
+    records.add(r);
+    b.writeln(r.message);
+  }
 }

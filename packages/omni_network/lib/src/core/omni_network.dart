@@ -16,6 +16,7 @@ import '../resilience/circuit_breaker.dart';
 import '../state/request_controller.dart';
 import '../resilience/retry_policy.dart';
 import '../transfer/download_target.dart';
+import '../transfer/stream_target.dart';
 import '../transfer/file_target_stub.dart'
     if (dart.library.io) '../transfer/file_target_io.dart';
 import '../transfer/multipart.dart';
@@ -547,6 +548,53 @@ final class OmniNetwork {
     return target.bytes;
   }
 
+  /// Opens a long-lived streamed response (e.g. Server-Sent Events) through
+  /// the full pipeline (interceptors, auth incl. refresh on 401, logging).
+  ///
+  /// Completes once a 2xx status and headers arrive; the body then flows
+  /// through [OmniStreamResponse.body]. Non-2xx throws [HttpFailure]. There
+  /// is no overall or idle timeout unless [timeout]/[idleTimeout] is given.
+  /// Cancelling the body subscription (or [OmniStreamResponse.cancel], or
+  /// the request's `cancelToken`) aborts the connection. Not retried.
+  Future<OmniStreamResponse> openStream(
+    OmniRequest request, {
+    Duration? timeout,
+    Duration? idleTimeout,
+  }) async {
+    final own = request.cancelToken?.child() ?? OmniCancelToken();
+    final target = StreamTarget(own.cancel);
+    final pipeline = _pipeline(
+      request.copyWith(cancelToken: own),
+      _Transfer(
+        target: target,
+        overall: timeout,
+        idle: idleTimeout,
+        noIdle: idleTimeout == null,
+      ),
+    );
+    unawaited(
+      pipeline.then(
+        (_) {},
+        onError: (Object e, StackTrace st) => target.fail(e, st),
+      ),
+    );
+    final first = await Future.any<Object?>([
+      target.started.then((_) => null),
+      pipeline,
+    ]);
+    if (first is OmniRawResponse) {
+      if (!first.isSuccess) throw HttpFailure(first);
+      // 2xx whose body already ended (begin() ran too): fall through.
+    }
+    final headers = await target.started;
+    return OmniStreamResponse(
+      statusCode: headers.$1,
+      headers: headers.$2,
+      body: target.stream,
+      cancel: own.cancel,
+    );
+  }
+
   /// Whether [downloadToFile] works on this platform (`false` on Web).
   static bool get supportsFileDownload => fileDownloadSupported;
 
@@ -845,7 +893,7 @@ final class OmniNetwork {
     Timer? idle;
     final idleLimit = t?.idle ?? timeout;
     void kick() {
-      if (t == null || signal.isCancelled) return;
+      if (t == null || t.noIdle || signal.isCancelled) return;
       idle?.cancel();
       idle = Timer(idleLimit, () => signal.cancel(_Reason.idle));
     }
@@ -934,6 +982,7 @@ final class OmniNetwork {
     var received = append ? t.resumeFrom : 0;
     final length = res.contentLength;
     final total = length == null ? null : length + received;
+    if (target is StreamTarget) target.head(res.statusCode, res.headers);
     await target.begin(append: append);
     final done = Completer<void>();
     void fail(Object e) {
@@ -1164,8 +1213,10 @@ final class _Transfer {
     this.overall,
     this.idle,
     this.resumeFrom = 0,
+    this.noIdle = false,
   });
 
+  final bool noIdle;
   final ProgressCallback? onSend;
   final ProgressCallback? onReceive;
   final DownloadTarget? target;

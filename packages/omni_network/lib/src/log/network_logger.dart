@@ -66,6 +66,7 @@ final class NetworkLogger {
         body: body,
         statusCode: res.statusCode,
         duration: res.duration,
+        source: res.source,
         message: [
           '$_tag #$id] <-- ${res.statusCode} ${r.method.verb} $url '
               '($ms ms, ${res.bodyBytes.length} B'
