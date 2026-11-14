@@ -3,6 +3,7 @@ import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
 import 'omni_screen.dart';
+import 'omni_screen_host.dart';
 
 /// A [StatefulWidget] screen with OmniRoute metadata. Pair with [OmniState].
 abstract class OmniStatefulWidget extends StatefulWidget with OmniScreen {
@@ -18,6 +19,22 @@ abstract class OmniStatefulWidget extends StatefulWidget with OmniScreen {
 
 class _OmniStatefulElement extends StatefulElement {
   _OmniStatefulElement(OmniStatefulWidget super.widget);
+
+  @override
+  void mount(Element? parent, Object? newSlot) {
+    // Reported (not thrown) before initState runs, so the cause is shown
+    // first and the element still mounts and disposes normally.
+    final screen = widget as OmniStatefulWidget;
+    if (!isHosted(parent, screen)) {
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: notHostedError(screen),
+          library: 'omni_route',
+        ),
+      );
+    }
+    super.mount(parent, newSlot);
+  }
 
   @override
   Widget build() {

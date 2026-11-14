@@ -3,10 +3,10 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../bloc/omni_bloc_scope.dart';
 import '../errors/omni_route_exception.dart';
 import '../guards/omni_guard.dart';
 import '../screens/omni_screen.dart';
+import '../screens/omni_screen_host.dart';
 import 'omni_params.dart';
 import 'omni_title.dart';
 
@@ -26,15 +26,36 @@ abstract final class OmniPages {
   /// Default. Uses the theme's transition for the platform: Android
   /// predictive back, iOS/macOS slide with swipe-back, etc.
   static Page<void> material(LocalKey key, String? name, Widget child) =>
-      MaterialPage<void>(key: key, name: name, child: child);
+      MaterialPage<void>(
+        key: key,
+        name: name,
+        restorationId: _restorationId(key),
+        child: child,
+      );
 
   /// Cupertino slide and swipe-back on every platform.
   static Page<void> cupertino(LocalKey key, String? name, Widget child) =>
-      CupertinoPage<void>(key: key, name: name, title: name, child: child);
+      CupertinoPage<void>(
+        key: key,
+        name: name,
+        title: name,
+        restorationId: _restorationId(key),
+        child: child,
+      );
 
   /// No animation (common on web and desktop).
   static Page<void> none(LocalKey key, String? name, Widget child) =>
-      NoTransitionPage<void>(key: key, name: name, child: child);
+      NoTransitionPage<void>(
+        key: key,
+        name: name,
+        restorationId: _restorationId(key),
+        child: child,
+      );
+
+  // go_router page keys are unique, stable ValueKey<String>s per match:
+  // reuse them so the Navigator can restore the page stack.
+  static String? _restorationId(LocalKey key) =>
+      key is ValueKey<String> ? key.value : null;
 }
 
 /// A route to an OmniRoute screen. Compiles to a plain [GoRoute].
@@ -49,6 +70,9 @@ class OmniPage<S extends OmniScreen> extends GoRoute {
   /// A route at [path] showing the screen built by [screenBuilder].
   ///
   /// [guards] run before this route is shown; [routes] are nested routes.
+  /// [metadata] is go_router's route metadata (e.g. `{'title': ..., 'roles':
+  /// [...]}`), readable in guards via `state.metadata` and in
+  /// [OmniRouteEntry.metadata].
   factory OmniPage(
     String path,
     OmniScreenBuilder<S> screenBuilder, {
@@ -58,6 +82,7 @@ class OmniPage<S extends OmniScreen> extends GoRoute {
     GoRouterRedirect? redirect,
     List<OmniGuard> guards = const [],
     OmniPageType? pageType,
+    Map<String, dynamic>? metadata,
   }) {
     late final OmniPage<S> page;
     page = OmniPage._(
@@ -69,6 +94,7 @@ class OmniPage<S extends OmniScreen> extends GoRoute {
       parentNavigatorKey,
       composeGuards(guards, redirect),
       pageType,
+      metadata,
     );
     return page;
   }
@@ -82,7 +108,9 @@ class OmniPage<S extends OmniScreen> extends GoRoute {
     GlobalKey<NavigatorState>? parentNavigatorKey,
     GoRouterRedirect? redirect,
     this.pageType,
+    Map<String, dynamic>? metadata,
   ) : super(
+        metadata: metadata,
         path: path,
         name: name,
         routes: routes,
@@ -103,35 +131,69 @@ class OmniPage<S extends OmniScreen> extends GoRoute {
   /// Wraps the screen with its Bloc scope. One Page per route match (keyed
   /// by `pageKey`), so rebuilds keep the same Blocs; unmounting closes them.
   Page<void> _buildPage(BuildContext context, GoRouterState state) {
+    final config = OmniPageConfig.of(context);
     Widget child;
     String? name;
     try {
       final screen = screenBuilder(OmniParams(state));
       name = screen.screenName;
-      child = OmniBlocScope(
-        provide: screen.provide,
-        child: omniTitles
-            ? OmniTitle(title: screen.title, child: screen)
-            : screen,
+      child = OmniRouteStateScope(
+        state: state,
+        child: hostScreen(
+          screen,
+          wrap: config.titles
+              ? (s) => OmniTitle(title: screen.title, child: s)
+              : null,
+        ),
       );
     } on OmniRouteException catch (e) {
-      child = omniErrorBuilder(context, state, e);
+      child = config.errorBuilder(context, state, e);
     }
-    return (pageType ?? omniPageType)(state.pageKey, name, child);
+    return (pageType ?? config.pageType)(state.pageKey, name, child);
   }
 }
 
-/// Set by OmniApp: default page type.
+/// Per-app page settings, provided by OmniApp above its router so that
+/// several OmniApps (multi-window desktop, tests) never share settings.
 @internal
-OmniPageType omniPageType = OmniPages.material;
+class OmniPageConfig extends InheritedWidget {
+  /// Provides the settings to [child].
+  const OmniPageConfig({
+    super.key,
+    required this.pageType,
+    required this.titles,
+    required this.errorBuilder,
+    required super.child,
+  });
 
-/// Set by OmniApp: whether pages set the browser/app-switcher title.
-@internal
-bool omniTitles = true;
+  /// Defaults used when no OmniApp is above (e.g. a bare GoRouter in tests).
+  static const fallback = OmniPageConfig(
+    pageType: OmniPages.material,
+    titles: true,
+    errorBuilder: defaultOmniErrorBuilder,
+    child: SizedBox(),
+  );
 
-/// Set by OmniApp. Shows invalid-parameter and not-found errors.
-@internal
-OmniErrorBuilder omniErrorBuilder = defaultOmniErrorBuilder;
+  /// Default page type.
+  final OmniPageType pageType;
+
+  /// Whether pages set the browser/app-switcher title.
+  final bool titles;
+
+  /// Shows invalid-parameter and not-found errors.
+  final OmniErrorBuilder errorBuilder;
+
+  /// The nearest settings, read without subscribing (pages are built by the
+  /// router, which already rebuilds them when needed).
+  static OmniPageConfig of(BuildContext context) =>
+      context.getInheritedWidgetOfExactType<OmniPageConfig>() ?? fallback;
+
+  @override
+  bool updateShouldNotify(OmniPageConfig old) =>
+      old.pageType != pageType ||
+      old.titles != titles ||
+      old.errorBuilder != errorBuilder;
+}
 
 /// Default error page: details in debug, a generic message in release.
 Widget defaultOmniErrorBuilder(

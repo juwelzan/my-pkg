@@ -28,8 +28,11 @@ class StudentBloc extends Bloc<String, List<String>> {
   }
 }
 
-class StudentDetailBloc extends Bloc<void, String> {
-  StudentDetailBloc(int id) : super('Student #$id');
+/// Route-scoped: shared by a student's detail and edit pages.
+class StudentDetailBloc extends Bloc<String, String> {
+  StudentDetailBloc(int id) : super('Student #$id') {
+    on<String>((name, emit) => emit(name));
+  }
 }
 
 /// Global: one instance for the whole app.
@@ -77,6 +80,8 @@ class ExampleApp extends StatelessWidget {
   Widget build(BuildContext context) => OmniApp(
     initialRoute: '/dashboard',
     guards: const [AuthGuard()],
+    logNavigation: true, // debug builds print each navigation
+    restorationScopeId: 'router', // restore the route stack after restart
     blocs: [
       // Global Blocs: created once, live for the whole app.
       OmniBloc<AuthBloc>((_) => AuthBloc(), global: true, lazy: false),
@@ -99,9 +104,26 @@ class ExampleApp extends StatelessWidget {
                 '/students',
                 (_) => const StudentListScreen(),
                 routes: [
-                  OmniPage(
-                    ':id',
-                    (p) => StudentDetailScreen(id: p.pathInt('id')),
+                  // Route scope: detail and edit share these Blocs; they are
+                  // closed when the user leaves this student.
+                  OmniRouteGroup(
+                    scopeKey: (s) => s.pathParameters['id'],
+                    provide: [
+                      Provide<StudentDetailBloc>.create(
+                        (c) =>
+                            StudentDetailBloc(OmniParams.of(c).pathInt('id')),
+                      ),
+                      const Provide<AttendanceBloc>(),
+                    ],
+                    routes: [
+                      OmniPage(
+                        ':id',
+                        (p) => StudentDetailScreen(id: p.pathInt('id')),
+                        routes: [
+                          OmniPage('edit', (_) => const StudentEditScreen()),
+                        ],
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -122,6 +144,7 @@ class ExampleApp extends StatelessWidget {
     builder: (context, router) => BlocBuilder<ThemeBloc, bool>(
       builder: (context, dark) => MaterialApp.router(
         title: 'OmniRoute Example',
+        restorationScopeId: 'app',
         routerConfig: router,
         theme: ThemeData(
           colorSchemeSeed: Colors.indigo,
@@ -231,12 +254,6 @@ class StudentDetailScreen extends OmniStatelessWidget {
   String get screenName => 'Student';
   @override
   String get title => 'Student $id';
-  // Multiple Blocs: one built from a route parameter, one from the registry.
-  @override
-  List<Provide> get provide => [
-    Provide<StudentDetailBloc>.create((_) => StudentDetailBloc(id)),
-    const Provide<AttendanceBloc>(),
-  ];
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: Text(title)),
@@ -249,6 +266,51 @@ class StudentDetailScreen extends OmniStatelessWidget {
           TextButton(
             onPressed: () => context.read<AttendanceBloc>().add(null),
             child: const Text('Mark present'),
+          ),
+          TextButton(
+            onPressed: () => OmniRoute.push('/students/$id/edit'),
+            child: const Text('Edit'),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+class StudentEditScreen extends OmniStatefulWidget {
+  const StudentEditScreen({super.key});
+  @override
+  String get screenName => 'Edit student';
+  @override
+  State<StudentEditScreen> createState() => _StudentEditState();
+}
+
+class _StudentEditState extends OmniState<StudentEditScreen> {
+  // Same StudentDetailBloc instance as the detail page (route scope).
+  late final controller = TextEditingController(
+    text: context.read<StudentDetailBloc>().state,
+  );
+
+  @override
+  void dispose() {
+    controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: Text(widget.screenName)),
+    body: Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          TextField(controller: controller),
+          FilledButton(
+            onPressed: () {
+              context.read<StudentDetailBloc>().add(controller.text);
+              OmniRoute.pop();
+            },
+            child: const Text('Save'),
           ),
         ],
       ),

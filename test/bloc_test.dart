@@ -19,18 +19,38 @@ abstract class CountedBloc extends Bloc<int, int> {
   }
 }
 
-class AuthBloc extends CountedBloc { AuthBloc() : super('auth'); }
-class StudentBloc extends CountedBloc { StudentBloc() : super('student'); }
-class AttendanceBloc extends CountedBloc { AttendanceBloc() : super('attendance'); }
-class Repo { const Repo(this.id); final int id; }
-class RepoBloc extends CountedBloc { RepoBloc(this.repo) : super('repo'); final Repo repo; }
+class AuthBloc extends CountedBloc {
+  AuthBloc() : super('auth');
+}
+
+class StudentBloc extends CountedBloc {
+  StudentBloc() : super('student');
+}
+
+class AttendanceBloc extends CountedBloc {
+  AttendanceBloc() : super('attendance');
+}
+
+class Repo {
+  const Repo(this.id);
+  final int id;
+}
+
+class RepoBloc extends CountedBloc {
+  RepoBloc(this.repo) : super('repo');
+  final Repo repo;
+}
 
 class StudentScreen extends OmniStatelessWidget {
   const StudentScreen({super.key, this.label = ''});
   final String label;
-  @override String get screenName => 'Students';
-  @override List<Provide> get provide =>
-      const [Provide<StudentBloc>(lazy: false), Provide<AttendanceBloc>(lazy: false)];
+  @override
+  String get screenName => 'Students';
+  @override
+  List<Provide> get provide => const [
+    Provide<StudentBloc>(lazy: false),
+    Provide<AttendanceBloc>(lazy: false),
+  ];
   @override
   Widget build(BuildContext context) {
     final s = context.read<StudentBloc>();
@@ -42,15 +62,22 @@ class StudentScreen extends OmniStatelessWidget {
 
 class StatefulStudent extends OmniStatefulWidget {
   const StatefulStudent({super.key});
-  @override String get screenName => 'S';
-  @override List<Provide> get provide => const [Provide<StudentBloc>()];
-  @override State<StatefulStudent> createState() => _S();
+  @override
+  String get screenName => 'S';
+  @override
+  List<Provide> get provide => const [Provide<StudentBloc>()];
+  @override
+  State<StatefulStudent> createState() => _S();
 }
 
 class _S extends OmniState<StatefulStudent> {
   late final StudentBloc bloc;
   @override
-  void initState() { super.initState(); bloc = context.read<StudentBloc>(); }
+  void initState() {
+    super.initState();
+    bloc = context.read<StudentBloc>();
+  }
+
   @override
   Widget build(BuildContext context) => Text('stateful ${bloc.state}');
 }
@@ -65,15 +92,21 @@ final registry = OmniBlocRegistry([
 /// Simulates what OmniRoute's page builder will do in Phase 4.
 Widget page(OmniScreen s) => OmniBlocScope(provide: s.provide, child: s);
 
-Widget app(Widget home, {GlobalKey<NavigatorState>? nav}) => OmniGlobalBlocScope(
+Widget app(Widget home, {GlobalKey<NavigatorState>? nav}) =>
+    OmniGlobalBlocScope(
       registry: registry,
       child: MaterialApp(navigatorKey: nav, home: home),
     );
 
 void main() {
-  setUp(() { created.clear(); closed.clear(); });
+  setUp(() {
+    created.clear();
+    closed.clear();
+  });
 
-  testWidgets('global + multiple screen blocs; rebuild does not recreate', (t) async {
+  testWidgets('global + multiple screen blocs; rebuild does not recreate', (
+    t,
+  ) async {
     await t.pumpWidget(app(page(const StudentScreen(label: 'a'))));
     await t.pumpWidget(app(page(const StudentScreen(label: 'b'))));
     expect(find.text('studentsb 0'), findsOneWidget);
@@ -86,18 +119,28 @@ void main() {
     expect(find.text('stateful 0'), findsOneWidget);
   });
 
-  testWidgets('push keeps, pop closes; global survives; 100 cycles balance', (t) async {
+  testWidgets('push keeps, pop closes; global survives; 100 cycles balance', (
+    t,
+  ) async {
     final nav = GlobalKey<NavigatorState>();
     await t.pumpWidget(app(const Text('home'), nav: nav));
     for (var i = 0; i < 100; i++) {
-      nav.currentState!.push(MaterialPageRoute<void>(
-          builder: (_) => page(const StudentScreen())));
+      nav.currentState!.push(
+        MaterialPageRoute<void>(builder: (_) => page(const StudentScreen())),
+      );
       await t.pumpAndSettle();
-      nav.currentState!.push(MaterialPageRoute<void>(
-          builder: (_) => const Text('top')));
+      nav.currentState!.push(
+        MaterialPageRoute<void>(builder: (_) => const Text('top')),
+      );
       await t.pumpAndSettle();
-      expect(closed['student'], i == 0 ? null : i, reason: 'covered screen kept');
-      nav.currentState!..pop()..pop();
+      expect(
+        closed['student'],
+        i == 0 ? null : i,
+        reason: 'covered screen kept',
+      );
+      nav.currentState!
+        ..pop()
+        ..pop();
       await t.pumpAndSettle();
     }
     expect(created['student'], 100);
@@ -111,8 +154,14 @@ void main() {
 
   testWidgets('value bloc is never closed by OmniRoute', (t) async {
     final external = StudentBloc();
-    await t.pumpWidget(app(OmniBlocScope(
-        provide: [Provide.value(external)], child: const SizedBox())));
+    await t.pumpWidget(
+      app(
+        OmniBlocScope(
+          provide: [Provide.value(external)],
+          child: const SizedBox(),
+        ),
+      ),
+    );
     await t.pumpWidget(app(const SizedBox()));
     expect(closed['student'], isNull);
     expect(external.isClosed, isFalse);
@@ -120,44 +169,106 @@ void main() {
     expect(closed['student'], 1);
   });
 
-  testWidgets('factory gets dependencies from context; Provide.create', (t) async {
+  testWidgets('factory gets dependencies from context; Provide.create', (
+    t,
+  ) async {
     late RepoBloc r;
-    await t.pumpWidget(app(RepositoryProvider<Repo>.value(
-      value: const Repo(7),
-      child: OmniBlocScope(
-        provide: [const Provide<RepoBloc>(), Provide<AttendanceBloc>.create((_) => AttendanceBloc())],
-        child: Builder(builder: (c) { r = c.read<RepoBloc>(); c.read<AttendanceBloc>(); return const SizedBox(); }),
+    await t.pumpWidget(
+      app(
+        RepositoryProvider<Repo>.value(
+          value: const Repo(7),
+          child: OmniBlocScope(
+            provide: [
+              const Provide<RepoBloc>(),
+              Provide<AttendanceBloc>.create((_) => AttendanceBloc()),
+            ],
+            child: Builder(
+              builder: (c) {
+                r = c.read<RepoBloc>();
+                c.read<AttendanceBloc>();
+                return const SizedBox();
+              },
+            ),
+          ),
+        ),
       ),
-    )));
+    );
     expect(r.repo.id, 7);
     expect(created['attendance'], 1);
   });
 
   testWidgets('missing factory', (t) async {
-    await t.pumpWidget(OmniBlocScope(
+    await t.pumpWidget(
+      OmniBlocScope(
         provide: const [Provide<StudentBloc>()],
-        child: Builder(builder: (c) { c.read<StudentBloc>(); return const SizedBox(); })));
-    expect(t.takeException(), isA<OmniRouteException>()
-        .having((e) => e.code, 'code', OmniErrorCode.missingBlocFactory));
+        child: Builder(
+          builder: (c) {
+            c.read<StudentBloc>();
+            return const SizedBox();
+          },
+        ),
+      ),
+    );
+    expect(
+      t.takeException(),
+      isA<OmniRouteException>().having(
+        (e) => e.code,
+        'code',
+        OmniErrorCode.missingBlocFactory,
+      ),
+    );
   });
 
   testWidgets('duplicate in provide list', (t) async {
-    await t.pumpWidget(app(const OmniBlocScope(
-        provide: [Provide<StudentBloc>(), Provide<StudentBloc>()], child: SizedBox())));
-    expect(t.takeException(), isA<OmniRouteException>()
-        .having((e) => e.code, 'code', OmniErrorCode.duplicateBlocRegistration));
+    await t.pumpWidget(
+      app(
+        const OmniBlocScope(
+          provide: [Provide<StudentBloc>(), Provide<StudentBloc>()],
+          child: SizedBox(),
+        ),
+      ),
+    );
+    expect(
+      t.takeException(),
+      isA<OmniRouteException>().having(
+        (e) => e.code,
+        'code',
+        OmniErrorCode.duplicateBlocRegistration,
+      ),
+    );
   });
 
   testWidgets('screen re-providing a global bloc is rejected', (t) async {
-    await t.pumpWidget(app(OmniBlocScope(
-        provide: const [Provide<AuthBloc>()],
-        child: Builder(builder: (c) { c.read<AuthBloc>(); return const SizedBox(); }))));
-    expect(t.takeException(), isA<OmniRouteException>()
-        .having((e) => e.code, 'code', OmniErrorCode.unsupportedConfiguration));
+    await t.pumpWidget(
+      app(
+        OmniBlocScope(
+          provide: const [Provide<AuthBloc>()],
+          child: Builder(
+            builder: (c) {
+              c.read<AuthBloc>();
+              return const SizedBox();
+            },
+          ),
+        ),
+      ),
+    );
+    expect(
+      t.takeException(),
+      isA<OmniRouteException>().having(
+        (e) => e.code,
+        'code',
+        OmniErrorCode.unsupportedConfiguration,
+      ),
+    );
   });
 
   test('duplicate registration', () {
-    expect(() => OmniBlocRegistry([OmniBloc<AuthBloc>((_) => AuthBloc()), OmniBloc<AuthBloc>((_) => AuthBloc())]),
-        throwsA(isA<OmniRouteException>()));
+    expect(
+      () => OmniBlocRegistry([
+        OmniBloc<AuthBloc>((_) => AuthBloc()),
+        OmniBloc<AuthBloc>((_) => AuthBloc()),
+      ]),
+      throwsA(isA<OmniRouteException>()),
+    );
   });
 }

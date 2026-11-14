@@ -10,6 +10,7 @@ import 'omni_path.dart';
 class OmniRouteRegistry {
   OmniRouteRegistry(List<RouteBase> routes) {
     final all = <String>[];
+    final names = <String, String>{};
     void walk(List<RouteBase> list, String parent, bool topLevel) {
       for (final r in list) {
         var nextParent = parent;
@@ -20,6 +21,18 @@ class OmniRouteRegistry {
               ? r.path
               : (parent == '/' ? '/${r.path}' : '$parent/${r.path}');
           all.add(full);
+          final name = r.name;
+          if (name != null) {
+            final previous = names[name];
+            if (previous != null) {
+              throw OmniRouteException(
+                OmniErrorCode.duplicateRoute,
+                'Route name "$name" is used by both $previous and $full.',
+                hint: 'Route names must be unique; rename one of them.',
+              );
+            }
+            names[name] = full;
+          }
           if (r is OmniPage) {
             _byType.update(r.screenType, (_) => null, ifAbsent: () => full);
           }

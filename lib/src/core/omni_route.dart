@@ -3,14 +3,23 @@ import 'package:go_router/go_router.dart';
 import 'package:meta/meta.dart';
 
 import '../errors/omni_route_exception.dart';
+import 'omni_route_entry.dart';
 import '../routing/omni_route_registry.dart';
 import '../screens/omni_screen.dart';
 
 /// Navigation helpers for the running [OmniApp]. Each call delegates to its
 /// single [GoRouter]; `context.go(...)` from go_router works just as well.
+///
+/// With several [OmniApp]s mounted at once (e.g. multi-window desktop), these
+/// helpers act on the most recently mounted one; navigate the others with
+/// `context.go(...)` from inside them.
 abstract final class OmniRoute {
-  static GoRouter? _router;
-  static OmniRouteRegistry? _registry;
+  // Mounted apps, oldest first; the helpers use the last one.
+  static final List<(GoRouter, OmniRouteRegistry)> _apps = [];
+
+  static GoRouter? get _router => _apps.isEmpty ? null : _apps.last.$1;
+  static OmniRouteRegistry? get _registry =>
+      _apps.isEmpty ? null : _apps.last.$2;
 
   /// Use clean path URLs on the web (`/students/101`, not `/#/students/101`).
   /// Call once in `main()` **before** `runApp`. No-op on other platforms.
@@ -35,19 +44,39 @@ abstract final class OmniRoute {
 
   /// Connects the helpers to [r]. Called by OmniApp.
   @internal
-  static void attach(GoRouter r, OmniRouteRegistry reg) {
-    _router = r;
-    _registry = reg;
-  }
+  static void attach(GoRouter r, OmniRouteRegistry reg) => _apps.add((r, reg));
 
-  /// Disconnects [r] if it is the current router.
+  /// Disconnects [r]; the previously mounted app (if any) becomes current.
   @internal
-  static void detach(GoRouter r) {
-    if (identical(_router, r)) _router = _registry = null;
-  }
+  static void detach(GoRouter r) =>
+      _apps.removeWhere((app) => identical(app.$1, r));
 
   /// Current location, e.g. `/students/101?tab=a`.
-  static Uri get location => router.routerDelegate.currentConfiguration.uri;
+  ///
+  /// Includes pages added with [push] (go_router's base configuration does
+  /// not), so it always matches the page on top.
+  static Uri get location => router.state.uri;
+
+  /// go_router's state of the page on top (params, `metadata`, `extra`...).
+  static GoRouterState get state => router.state;
+
+  /// The page on top.
+  static OmniRouteEntry get current {
+    final s = router.state;
+    final route = s.topRoute;
+    return route == null
+        ? OmniRouteEntry(
+            location: s.matchedLocation,
+            name: s.name,
+            path: s.path,
+          )
+        : OmniRouteEntry.fromRoute(route, s.matchedLocation);
+  }
+
+  /// All pages, bottom to top, including pages inside shells and pushed
+  /// pages — for debugging tools and tests.
+  static List<OmniRouteEntry> get stack =>
+      entriesOf(router.routerDelegate.currentConfiguration);
 
   /// Replace the whole stack with [location] (also the way to "clear and go").
   static void go(String location, {Object? extra}) =>

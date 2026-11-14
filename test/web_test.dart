@@ -8,22 +8,32 @@ class S extends OmniStatelessWidget {
   const S(this.label, {super.key, this.customTitle});
   final String label;
   final String? customTitle;
-  @override String get screenName => label;
-  @override String get title => customTitle ?? screenName;
-  @override Widget build(BuildContext context) => Text(label);
+  @override
+  String get screenName => label;
+  @override
+  String get title => customTitle ?? screenName;
+  @override
+  Widget build(BuildContext context) => Text(label);
 }
 
 Widget buildApp({bool titles = true}) => OmniApp(
-      setTitles: titles,
+  setTitles: titles,
+  routes: [
+    OmniPage('/', (_) => const S('Home')),
+    OmniPage(
+      '/students',
+      (_) => const S('Students'),
       routes: [
-        OmniPage('/', (_) => const S('Home')),
-        OmniPage('/students', (_) => const S('Students'), routes: [
-          OmniPage(':id', (p) => S('Student', customTitle: 'Student ${p.path('id')}')),
-        ]),
-        OmniPage('/profile/:name', (p) => S('profile ${p.path('name')}')),
+        OmniPage(
+          ':id',
+          (p) => S('Student', customTitle: 'Student ${p.path('id')}'),
+        ),
       ],
-      builder: (_, router) => MaterialApp.router(routerConfig: router),
-    );
+    ),
+    OmniPage('/profile/:name', (p) => S('profile ${p.path('name')}')),
+  ],
+  builder: (_, router) => MaterialApp.router(routerConfig: router),
+);
 
 void main() {
   final titles = <String>[];
@@ -31,11 +41,11 @@ void main() {
     titles.clear();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(SystemChannels.platform, (call) async {
-      if (call.method == 'SystemChrome.setApplicationSwitcherDescription') {
-        titles.add((call.arguments as Map)['label'] as String);
-      }
-      return null;
-    });
+          if (call.method == 'SystemChrome.setApplicationSwitcherDescription') {
+            titles.add((call.arguments as Map)['label'] as String);
+          }
+          return null;
+        });
   });
 
   testWidgets('title follows push and pop', (t) async {
@@ -56,7 +66,9 @@ void main() {
     expect(titles.where((x) => x == 'Home'), isEmpty);
   });
 
-  testWidgets('trailing slash normalized, query kept, encoding round-trips', (t) async {
+  testWidgets('trailing slash normalized, query kept, encoding round-trips', (
+    t,
+  ) async {
     await t.pumpWidget(buildApp());
     OmniRoute.go('/students/7/?tab=a');
     await t.pumpAndSettle();
@@ -71,19 +83,25 @@ void main() {
 
   testWidgets('title follows stateful shell tab switches', (t) async {
     late StatefulNavigationShell nav;
-    await t.pumpWidget(OmniApp(
-      initialRoute: '/a',
-      routes: [
-        OmniStatefulShell(
-          builder: (_, _, shell) => nav = shell,
-          branches: [
-            StatefulShellBranch(routes: [OmniPage('/a', (_) => const S('Tab A'))]),
-            StatefulShellBranch(routes: [OmniPage('/b', (_) => const S('Tab B'))]),
-          ],
-        ),
-      ],
-      builder: (_, router) => MaterialApp.router(routerConfig: router),
-    ));
+    await t.pumpWidget(
+      OmniApp(
+        initialRoute: '/a',
+        routes: [
+          OmniStatefulShell(
+            builder: (_, _, shell) => nav = shell,
+            branches: [
+              StatefulShellBranch(
+                routes: [OmniPage('/a', (_) => const S('Tab A'))],
+              ),
+              StatefulShellBranch(
+                routes: [OmniPage('/b', (_) => const S('Tab B'))],
+              ),
+            ],
+          ),
+        ],
+        builder: (_, router) => MaterialApp.router(routerConfig: router),
+      ),
+    );
     await t.pumpAndSettle();
     expect(titles.last, 'Tab A');
     nav.goBranch(1);
@@ -94,14 +112,18 @@ void main() {
     expect(titles.last, 'Tab A');
   });
 
-  testWidgets('title tracking never resets screen state on push/pop', (t) async {
-    await t.pumpWidget(OmniApp(
-      routes: [
-        OmniPage('/', (_) => const CounterScreen()),
-        OmniPage('/next', (_) => const S('Next')),
-      ],
-      builder: (_, router) => MaterialApp.router(routerConfig: router),
-    ));
+  testWidgets('title tracking never resets screen state on push/pop', (
+    t,
+  ) async {
+    await t.pumpWidget(
+      OmniApp(
+        routes: [
+          OmniPage('/', (_) => const CounterScreen()),
+          OmniPage('/next', (_) => const S('Next')),
+        ],
+        builder: (_, router) => MaterialApp.router(routerConfig: router),
+      ),
+    );
     await t.pumpAndSettle();
     await t.tap(find.text('count 0'));
     await t.pump();
@@ -116,8 +138,10 @@ void main() {
 
 class CounterScreen extends OmniStatefulWidget {
   const CounterScreen({super.key});
-  @override String get screenName => 'Counter';
-  @override State<CounterScreen> createState() => _CounterState();
+  @override
+  String get screenName => 'Counter';
+  @override
+  State<CounterScreen> createState() => _CounterState();
 }
 
 class _CounterState extends OmniState<CounterScreen> {

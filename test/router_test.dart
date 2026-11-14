@@ -19,13 +19,23 @@ class TagBloc extends Bloc<int, int> {
   }
 }
 
-class AuthBloc extends TagBloc { AuthBloc() : super('auth'); }
-class ListBloc extends TagBloc { ListBloc() : super('list'); }
-class DetailBloc extends TagBloc { DetailBloc(this.id) : super('detail'); final int id; }
+class AuthBloc extends TagBloc {
+  AuthBloc() : super('auth');
+}
+
+class ListBloc extends TagBloc {
+  ListBloc() : super('list');
+}
+
+class DetailBloc extends TagBloc {
+  DetailBloc(this.id) : super('detail');
+  final int id;
+}
 
 class HomeScreen extends OmniStatelessWidget {
   const HomeScreen({super.key});
-  @override String get screenName => 'Home';
+  @override
+  String get screenName => 'Home';
   @override
   Widget build(BuildContext context) {
     context.read<AuthBloc>();
@@ -35,45 +45,73 @@ class HomeScreen extends OmniStatelessWidget {
 
 class ListScreen extends OmniStatelessWidget {
   const ListScreen({super.key});
-  @override String get screenName => 'List';
-  @override List<Provide> get provide => const [Provide<ListBloc>(lazy: false)];
-  @override Widget build(BuildContext context) => const Text('list');
+  @override
+  String get screenName => 'List';
+  @override
+  List<Provide> get provide => const [Provide<ListBloc>(lazy: false)];
+  @override
+  Widget build(BuildContext context) => const Text('list');
 }
 
 class DetailScreen extends OmniStatefulWidget {
   const DetailScreen({super.key, required this.id, this.tab});
   final int id;
   final String? tab;
-  @override String get screenName => 'Detail';
-  @override List<Provide> get provide =>
-      [Provide<DetailBloc>.create((_) => DetailBloc(id), lazy: false)];
-  @override State<DetailScreen> createState() => _DetailState();
+  @override
+  String get screenName => 'Detail';
+  @override
+  List<Provide> get provide => [
+    Provide<DetailBloc>.create((_) => DetailBloc(id), lazy: false),
+  ];
+  @override
+  State<DetailScreen> createState() => _DetailState();
 }
 
 class _DetailState extends OmniState<DetailScreen> {
   @override
-  Widget build(BuildContext context) => Column(children: [
-        Text('detail ${widget.id} ${widget.tab} ${context.read<DetailBloc>().id}'),
-        Text('loc ${routeState.uri}'),
-        TextButton(onPressed: () => OmniRoute.pop(widget.id * 2), child: const Text('done')),
-      ]);
+  Widget build(BuildContext context) => Column(
+    children: [
+      Text(
+        'detail ${widget.id} ${widget.tab} ${context.read<DetailBloc>().id}',
+      ),
+      Text('loc ${routeState.uri}'),
+      TextButton(
+        onPressed: () => OmniRoute.pop(widget.id * 2),
+        child: const Text('done'),
+      ),
+    ],
+  );
 }
 
 Widget buildApp({OmniErrorBuilder? notFound}) => OmniApp(
-      blocs: [OmniBloc<AuthBloc>((_) => AuthBloc(), global: true), OmniBloc<ListBloc>((_) => ListBloc())],
-      notFound: notFound,
+  blocs: [
+    OmniBloc<AuthBloc>((_) => AuthBloc(), global: true),
+    OmniBloc<ListBloc>((_) => ListBloc()),
+  ],
+  notFound: notFound,
+  routes: [
+    OmniPage('/', (_) => const HomeScreen()),
+    OmniPage(
+      '/students',
+      (_) => const ListScreen(),
+      name: 'students',
       routes: [
-        OmniPage('/', (_) => const HomeScreen()),
-        OmniPage('/students', (_) => const ListScreen(), name: 'students', routes: [
-          OmniPage(':id', (p) => DetailScreen(id: p.pathInt('id'), tab: p.query('tab'))),
-        ]),
-        GoRoute(path: '/raw', builder: (_, _) => const Text('raw')),
+        OmniPage(
+          ':id',
+          (p) => DetailScreen(id: p.pathInt('id'), tab: p.query('tab')),
+        ),
       ],
-      builder: (_, router) => MaterialApp.router(routerConfig: router),
-    );
+    ),
+    GoRoute(path: '/raw', builder: (_, _) => const Text('raw')),
+  ],
+  builder: (_, router) => MaterialApp.router(routerConfig: router),
+);
 
 void main() {
-  setUp(() { created.clear(); closed.clear(); });
+  setUp(() {
+    created.clear();
+    closed.clear();
+  });
 
   testWidgets('go / push / pop / replace / result', (t) async {
     await t.pumpWidget(buildApp());
@@ -88,6 +126,11 @@ void main() {
     await t.pumpAndSettle();
     expect(find.text('detail 7 info 7'), findsOneWidget);
     expect(find.text('loc /students/7?tab=info'), findsOneWidget);
+    expect(
+      OmniRoute.location.toString(),
+      '/students/7?tab=info',
+      reason: 'regression: location must include pushed pages',
+    );
     expect(closed['list'], isNull, reason: 'covered page keeps its bloc');
 
     await t.tap(find.text('done'));
@@ -107,18 +150,36 @@ void main() {
     OmniRoute.to<DetailScreen>(path: {'id': '42'}, query: {'tab': 'a b'});
     await t.pumpAndSettle();
     expect(find.text('detail 42 a b 42'), findsOneWidget);
-    expect(OmniRoute.locationOf<DetailScreen>(path: {'id': '1'}), '/students/1');
+    expect(
+      OmniRoute.locationOf<DetailScreen>(path: {'id': '1'}),
+      '/students/1',
+    );
     OmniRoute.goNamed('students');
     await t.pumpAndSettle();
     expect(find.text('list'), findsOneWidget);
-    expect(() => OmniRoute.locationOf<DetailScreen>(),
-        throwsA(isA<OmniRouteException>()));
-    expect(() => OmniRoute.locationOf<_Unregistered>(),
-        throwsA(isA<OmniRouteException>().having((e) => e.code, 'c', OmniErrorCode.missingRoute)));
+    expect(
+      () => OmniRoute.locationOf<DetailScreen>(),
+      throwsA(isA<OmniRouteException>()),
+    );
+    expect(
+      () => OmniRoute.locationOf<_Unregistered>(),
+      throwsA(
+        isA<OmniRouteException>().having(
+          (e) => e.code,
+          'c',
+          OmniErrorCode.missingRoute,
+        ),
+      ),
+    );
   });
 
   testWidgets('unknown url and invalid param show error page', (t) async {
-    await t.pumpWidget(buildApp(notFound: (_, s, e) => Text('404 ${s.uri.path} ${e is OmniRouteException}')));
+    await t.pumpWidget(
+      buildApp(
+        notFound: (_, s, e) =>
+            Text('404 ${s.uri.path} ${e is OmniRouteException}'),
+      ),
+    );
     OmniRoute.go('/nope');
     await t.pumpAndSettle();
     expect(find.text('404 /nope false'), findsOneWidget);
@@ -143,27 +204,52 @@ void main() {
   testWidgets('dispose detaches router and closes globals', (t) async {
     await t.pumpWidget(buildApp());
     await t.pumpWidget(const SizedBox());
-    expect(() => OmniRoute.go('/'), throwsA(isA<OmniRouteException>()
-        .having((e) => e.code, 'c', OmniErrorCode.notInitialized)));
+    expect(
+      () => OmniRoute.go('/'),
+      throwsA(
+        isA<OmniRouteException>().having(
+          (e) => e.code,
+          'c',
+          OmniErrorCode.notInitialized,
+        ),
+      ),
+    );
     expect(closed['auth'], 1);
   });
 
   testWidgets('invalid / duplicate route config fails fast', (t) async {
-    await t.pumpWidget(OmniApp(
+    await t.pumpWidget(
+      OmniApp(
         routes: [OmniPage('/Bad', (_) => const HomeScreen())],
-        builder: (_, r) => MaterialApp.router(routerConfig: r)));
+        builder: (_, r) => MaterialApp.router(routerConfig: r),
+      ),
+    );
     expect(t.takeException(), isA<OmniRouteException>());
     expect(find.byType(ErrorWidget), findsOneWidget);
     await t.pumpWidget(const SizedBox());
-    await t.pumpWidget(OmniApp(
-        routes: [OmniPage('/a', (_) => const HomeScreen()), GoRoute(path: '/a', builder: (_, _) => const SizedBox())],
-        builder: (_, r) => MaterialApp.router(routerConfig: r)));
-    expect(t.takeException(), isA<OmniRouteException>()
-        .having((e) => e.code, 'c', OmniErrorCode.duplicateRoute));
+    await t.pumpWidget(
+      OmniApp(
+        routes: [
+          OmniPage('/a', (_) => const HomeScreen()),
+          GoRoute(path: '/a', builder: (_, _) => const SizedBox()),
+        ],
+        builder: (_, r) => MaterialApp.router(routerConfig: r),
+      ),
+    );
+    expect(
+      t.takeException(),
+      isA<OmniRouteException>().having(
+        (e) => e.code,
+        'c',
+        OmniErrorCode.duplicateRoute,
+      ),
+    );
   });
 }
 
 class _Unregistered extends OmniStatelessWidget {
-  @override String get screenName => 'x';
-  @override Widget build(BuildContext context) => const SizedBox();
+  @override
+  String get screenName => 'x';
+  @override
+  Widget build(BuildContext context) => const SizedBox();
 }

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
@@ -7,6 +8,7 @@ import '../guards/omni_guard.dart';
 import '../routing/omni_page.dart';
 import '../routing/omni_route_registry.dart';
 import 'omni_desktop_back.dart';
+import 'omni_route_entry.dart';
 import 'omni_route.dart';
 
 /// Builds your app widget around the router OmniApp created.
@@ -46,6 +48,9 @@ class OmniApp extends StatefulWidget {
     this.pageType = OmniPages.material,
     this.desktopBack = true,
     this.escapeGoesBack = false,
+    this.restorationScopeId,
+    this.onNavigate,
+    this.logNavigation = false,
   });
 
   /// [OmniPage]s and any raw go_router [RouteBase]s.
@@ -99,6 +104,20 @@ class OmniApp extends StatefulWidget {
   /// because Flutter handles their Escape before this.
   final bool escapeGoesBack;
 
+  /// Enables state restoration of the route stack (Android process death,
+  /// iOS state restoration). Also set `restorationScopeId` on your
+  /// `MaterialApp.router`. Restores locations and `Restorable*` widget
+  /// state — not Bloc state (Blocs are recreated; persist what you need).
+  final String? restorationScopeId;
+
+  /// Called after each navigation that changes the location (go, push, pop,
+  /// back, deep link, redirect). Use it for analytics or screen-view
+  /// tracking. Runs after the frame is scheduled; keep it cheap.
+  final void Function(OmniNavigation navigation)? onNavigate;
+
+  /// Print each navigation (debug builds only).
+  final bool logNavigation;
+
   @override
   State<OmniApp> createState() => _OmniAppState();
 }
@@ -116,9 +135,6 @@ class _OmniAppState extends State<OmniApp> {
       _blocs = OmniBlocRegistry(widget.blocs);
       final registry = OmniRouteRegistry(widget.routes);
       final onError = widget.notFound ?? defaultOmniErrorBuilder;
-      omniErrorBuilder = onError;
-      omniTitles = widget.setTitles;
-      omniPageType = widget.pageType;
       final router = _router = GoRouter(
         routes: widget.routes,
         initialLocation: widget.initialRoute,
@@ -134,8 +150,12 @@ class _OmniAppState extends State<OmniApp> {
         navigatorKey: widget.navigatorKey,
         observers: widget.observers,
         debugLogDiagnostics: widget.debugLogDiagnostics,
+        restorationScopeId: widget.restorationScopeId,
       );
       OmniRoute.attach(router, registry);
+      if (widget.onNavigate != null || widget.logNavigation) {
+        router.routerDelegate.addListener(_navigated);
+      }
     } catch (e, stack) {
       // Reported (not rethrown) so the element mounts and disposes cleanly;
       // build() then shows the error.
@@ -151,10 +171,29 @@ class _OmniAppState extends State<OmniApp> {
     }
   }
 
+  OmniRouteEntry? _last;
+  Uri? _lastUri;
+
+  void _navigated() {
+    final router = _router!;
+    final state = router.state;
+    if (state.uri == _lastUri) return;
+    final top = state.topRoute;
+    final to = top == null
+        ? OmniRouteEntry(location: state.matchedLocation, name: state.name)
+        : OmniRouteEntry.fromRoute(top, state.matchedLocation);
+    final event = OmniNavigation(from: _last, to: to, uri: state.uri);
+    _last = to;
+    _lastUri = state.uri;
+    if (widget.logNavigation && kDebugMode) debugPrint('[OmniRoute] $event');
+    widget.onNavigate?.call(event);
+  }
+
   @override
   void dispose() {
     final router = _router;
     if (router != null) {
+      router.routerDelegate.removeListener(_navigated);
       OmniRoute.detach(router);
       router.dispose();
     }
@@ -168,19 +207,24 @@ class _OmniAppState extends State<OmniApp> {
     if (router == null) {
       return ErrorWidget(_configError ?? 'OmniApp configuration failed');
     }
-    return OmniGlobalBlocScope(
-      registry: _blocs,
-      child: GuardRefresh(
-        guards: widget.guards,
-        notifier: _guardRefresh,
-        child: Builder(
-          builder: (c) => widget.desktopBack
-              ? OmniDesktopBack(
-                  router: router,
-                  escape: widget.escapeGoesBack,
-                  child: widget.builder(c, router),
-                )
-              : widget.builder(c, router),
+    return OmniPageConfig(
+      pageType: widget.pageType,
+      titles: widget.setTitles,
+      errorBuilder: widget.notFound ?? defaultOmniErrorBuilder,
+      child: OmniGlobalBlocScope(
+        registry: _blocs,
+        child: GuardRefresh(
+          guards: widget.guards,
+          notifier: _guardRefresh,
+          child: Builder(
+            builder: (c) => widget.desktopBack
+                ? OmniDesktopBack(
+                    router: router,
+                    escape: widget.escapeGoesBack,
+                    child: widget.builder(c, router),
+                  )
+                : widget.builder(c, router),
+          ),
         ),
       ),
     );

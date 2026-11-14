@@ -28,8 +28,10 @@ class GlobalBloc extends Bloc<int, int> {
 class P extends OmniStatelessWidget {
   const P(this.label, {super.key});
   final String label;
-  @override String get screenName => label;
-  @override List<Provide> get provide => const [Provide<PageBloc>(lazy: false)];
+  @override
+  String get screenName => label;
+  @override
+  List<Provide> get provide => const [Provide<PageBloc>(lazy: false)];
   @override
   Widget build(BuildContext context) {
     builds[label] = (builds[label] ?? 0) + 1;
@@ -40,25 +42,24 @@ class P extends OmniStatelessWidget {
 late StatefulNavigationShell shell;
 
 Widget app({int extraRoutes = 0}) => OmniApp(
-      blocs: [
-        OmniBloc<PageBloc>((_) => PageBloc()),
-        OmniBloc<GlobalBloc>((_) => GlobalBloc(), global: true, lazy: false),
+  blocs: [
+    OmniBloc<PageBloc>((_) => PageBloc()),
+    OmniBloc<GlobalBloc>((_) => GlobalBloc(), global: true, lazy: false),
+  ],
+  routes: [
+    OmniPage('/', (_) => const P('home')),
+    OmniPage('/item/:id', (p) => P('item ${p.path('id')}')),
+    OmniStatefulShell(
+      builder: (_, _, s) => shell = s,
+      branches: [
+        StatefulShellBranch(routes: [OmniPage('/t0', (_) => const P('t0'))]),
+        StatefulShellBranch(routes: [OmniPage('/t1', (_) => const P('t1'))]),
       ],
-      routes: [
-        OmniPage('/', (_) => const P('home')),
-        OmniPage('/item/:id', (p) => P('item ${p.path('id')}')),
-        OmniStatefulShell(
-          builder: (_, _, s) => shell = s,
-          branches: [
-            StatefulShellBranch(routes: [OmniPage('/t0', (_) => const P('t0'))]),
-            StatefulShellBranch(routes: [OmniPage('/t1', (_) => const P('t1'))]),
-          ],
-        ),
-        for (var i = 0; i < extraRoutes; i++)
-          OmniPage('/r$i/:id', (p) => P('r$i')),
-      ],
-      builder: (_, router) => MaterialApp.router(routerConfig: router),
-    );
+    ),
+    for (var i = 0; i < extraRoutes; i++) OmniPage('/r$i/:id', (p) => P('r$i')),
+  ],
+  builder: (_, router) => MaterialApp.router(routerConfig: router),
+);
 
 void main() {
   setUp(() {
@@ -66,7 +67,9 @@ void main() {
     builds.clear();
   });
 
-  testWidgets('long session: 1000 mixed navigations, no resource growth', (t) async {
+  testWidgets('long session: 1000 mixed navigations, no resource growth', (
+    t,
+  ) async {
     await t.pumpWidget(app());
     await t.pumpAndSettle();
     final elementsAtStart = _countElements(t);
@@ -84,8 +87,16 @@ void main() {
       await t.pumpAndSettle();
     }
     expect(OmniRoute.location.path, '/');
-    expect(created - closed, 1, reason: 'only the visible home page bloc is alive');
-    expect(_countElements(t), elementsAtStart, reason: 'widget tree returns to same size');
+    expect(
+      created - closed,
+      1,
+      reason: 'only the visible home page bloc is alive',
+    );
+    expect(
+      _countElements(t),
+      elementsAtStart,
+      reason: 'widget tree returns to same size',
+    );
   });
 
   testWidgets('covered page and app root are not rebuilt by push', (t) async {
@@ -96,7 +107,11 @@ void main() {
       OmniRoute.push('/item/$i');
       await t.pumpAndSettle();
     }
-    expect(builds['home'], homeBuilds, reason: 'home stays untouched under 20 pushes');
+    expect(
+      builds['home'],
+      homeBuilds,
+      reason: 'home stays untouched under 20 pushes',
+    );
     expect(created, 21, reason: 'one bloc per page, never recreated');
   });
 
@@ -112,7 +127,9 @@ void main() {
     expect(builds['home'], before);
   });
 
-  testWidgets('tab switching: 500 switches, no rebuild storms or recreation', (t) async {
+  testWidgets('tab switching: 500 switches, no rebuild storms or recreation', (
+    t,
+  ) async {
     await t.pumpWidget(app());
     OmniRoute.go('/t0');
     await t.pumpAndSettle();
@@ -129,7 +146,9 @@ void main() {
     expect(builds['t0']! + builds['t1']!, lessThanOrEqualTo(2 + 500));
   });
 
-  testWidgets('large registry: 1000 routes validate and match quickly', (t) async {
+  testWidgets('large registry: 1000 routes validate and match quickly', (
+    t,
+  ) async {
     final sw = Stopwatch()..start();
     await t.pumpWidget(app(extraRoutes: 1000));
     final startup = sw.elapsedMilliseconds;
@@ -143,7 +162,9 @@ void main() {
     expect(startup, lessThan(2000));
     expect(nav / 100, lessThan(50));
     expect(find.text('r999'), findsOneWidget);
-    debugPrint('1000-route startup ${startup}ms, avg go+frame ${nav / 100}ms (debug, test env)');
+    debugPrint(
+      '1000-route startup ${startup}ms, avg go+frame ${nav / 100}ms (debug, test env)',
+    );
   });
 }
 
@@ -153,6 +174,7 @@ int _countElements(WidgetTester t) {
     n++;
     e.visitChildren(visit);
   }
+
   t.binding.rootElement!.visitChildren(visit);
   return n;
 }

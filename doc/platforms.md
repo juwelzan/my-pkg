@@ -37,6 +37,36 @@ go_router's own page choice, which may be `NoTransitionPage` (see
 [performance.md](performance.md)). Use `pageBuilder` on those if you need a
 transition.
 
+## State restoration
+
+Android can kill a backgrounded app and restart it; iOS can restore state
+after relaunch. To bring the user back to the same screens:
+
+```dart
+OmniApp(
+  restorationScopeId: 'router',
+  builder: (context, router) => MaterialApp.router(
+    restorationScopeId: 'app',
+    routerConfig: router,
+  ),
+  ...
+)
+```
+
+For stateful shells, also set `restorationScopeId` on `OmniStatefulShell`
+and on each `StatefulShellBranch` (go_router requires both).
+
+| Restored | Not restored |
+|---|---|
+| The route stack, including pushed pages | Bloc state: Blocs are created again, as on first open |
+| The selected shell tab | `extra` objects |
+| `Restorable*` values in your widgets (`RestorationMixin`) | anything only in memory |
+
+Persist Bloc data you need yourself (e.g. local storage or
+`hydrated_bloc`). Verified with `restartAndRestore` in
+`test/restoration_test.dart`; not yet on a real Android process-death
+cycle.
+
 ## Back navigation
 
 - **Android / iOS:** handled by Flutter. `PopScope(canPop: false)` blocks

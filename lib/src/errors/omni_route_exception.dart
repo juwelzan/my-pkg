@@ -24,9 +24,12 @@ enum OmniErrorCode {
   /// A route parameter is missing or has the wrong type.
   invalidParameter,
 
-
   /// Navigation was used with no mounted OmniApp.
   notInitialized,
+
+  /// A stateful screen with Blocs is shown outside a route without
+  /// `OmniScreenHost`.
+  screenNotHosted,
 
   /// A configuration OmniRoute does not allow.
   unsupportedConfiguration,

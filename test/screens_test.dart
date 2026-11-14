@@ -91,8 +91,14 @@ void main() {
     testWidgets('empty screenName throws', (t) async {
       await t.pumpWidget(const EmptyNameScreen());
       final e = t.takeException();
-      expect(e, isA<OmniRouteException>()
-          .having((e) => e.code, 'code', OmniErrorCode.emptyScreenName));
+      expect(
+        e,
+        isA<OmniRouteException>().having(
+          (e) => e.code,
+          'code',
+          OmniErrorCode.emptyScreenName,
+        ),
+      );
     });
   });
 

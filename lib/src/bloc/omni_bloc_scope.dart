@@ -1,4 +1,5 @@
 import 'package:flutter/widgets.dart';
+import 'package:meta/meta.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../errors/omni_route_exception.dart';
@@ -49,7 +50,20 @@ class _RegistryScope extends InheritedWidget {
 /// owned Blocs are closed by flutter_bloc when this widget is unmounted.
 class OmniBlocScope extends StatelessWidget {
   /// Provides the Blocs in [provide] to [child].
-  const OmniBlocScope({super.key, required this.provide, required this.child});
+  const OmniBlocScope({super.key, required this.provide, required this.child})
+    : _screen = null;
+
+  /// Scope for [screen], shown as or inside [child]. Marks the screen as
+  /// hosted so it does not create its Blocs a second time.
+  @internal
+  const OmniBlocScope.forScreen({
+    super.key,
+    required Widget this._screen,
+    required this.provide,
+    required this.child,
+  });
+
+  final Widget? _screen;
 
   /// The Blocs to provide; each type at most once.
   final List<Provide> provide;
@@ -70,9 +84,23 @@ class OmniBlocScope extends StatelessWidget {
       }
     }
     final registry = OmniGlobalBlocScope.registryOf(context);
+    // A screen wrapped directly (or via forScreen) counts as hosted.
+    final screen = _screen ?? child;
     return MultiBlocProvider(
       providers: [for (final p in provide) p.toProvider(registry)],
-      child: child,
+      child: _HostMarker(screen: screen, child: child),
     );
   }
 }
+
+class _HostMarker extends InheritedWidget {
+  const _HostMarker({required this.screen, required super.child});
+  final Widget screen;
+  @override
+  bool updateShouldNotify(_HostMarker old) => false;
+}
+
+/// The screen widget whose Blocs the nearest scope above [context] provides.
+@internal
+Widget? hostedScreenAbove(BuildContext? context) =>
+    context?.getInheritedWidgetOfExactType<_HostMarker>()?.screen;

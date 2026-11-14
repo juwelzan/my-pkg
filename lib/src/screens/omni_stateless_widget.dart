@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 
 import 'omni_screen.dart';
+import 'omni_screen_host.dart';
 
 /// A [StatelessWidget] screen with OmniRoute metadata.
 ///
@@ -28,7 +29,17 @@ class _OmniStatelessElement extends StatelessElement {
   // dispose the element normally.
   @override
   Widget build() {
-    validateScreen(widget as OmniScreen);
-    return super.build();
+    final screen = widget as OmniStatelessWidget;
+    validateScreen(screen);
+    if (isHosted(this, screen)) return super.build();
+    // Shown outside a route: provide our own Blocs and build the screen
+    // with a context below them.
+    return hostScreen(
+      screen,
+      // This element owns the widget; calling its build is what
+      // StatelessElement itself does, only with an inner context.
+      // ignore: invalid_use_of_protected_member
+      wrap: (_) => Builder(builder: screen.build),
+    );
   }
 }

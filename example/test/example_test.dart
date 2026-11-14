@@ -24,6 +24,15 @@ void main() {
     await t.pump();
     expect(find.text('Present 1 days'), findsOneWidget);
 
+    // Route scope: the edit page changes the Bloc the detail page shows.
+    await t.tap(find.text('Edit'));
+    await t.pumpAndSettle();
+    await t.enterText(find.byType(TextField), 'Rahim');
+    await t.tap(find.text('Save'));
+    await t.pumpAndSettle();
+    expect(find.text('Rahim'), findsOneWidget);
+    expect(find.text('Present 1 days'), findsOneWidget);
+
     await t.tap(find.text('Settings'));
     await t.pumpAndSettle();
     await t.tap(find.byType(Switch));
@@ -40,7 +49,7 @@ void main() {
     await t.tap(find.text('Students'));
     await t.pumpAndSettle();
     expect(
-      find.text('Student #101'),
+      find.text('Rahim'),
       findsOneWidget,
       reason: 'tab kept its stack',
     );

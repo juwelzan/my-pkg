@@ -9,7 +9,8 @@ class S extends OmniStatelessWidget {
   const S(this.label, {super.key, this.blockBack = false});
   final String label;
   final bool blockBack;
-  @override String get screenName => label;
+  @override
+  String get screenName => label;
   @override
   Widget build(BuildContext context) {
     final body = Scaffold(body: Center(child: Text(label)));
@@ -17,10 +18,7 @@ class S extends OmniStatelessWidget {
   }
 }
 
-Widget app({
-  OmniPageType pageType = OmniPages.material,
-  bool escape = false,
-}) =>
+Widget app({OmniPageType pageType = OmniPages.material, bool escape = false}) =>
     OmniApp(
       pageType: pageType,
       escapeGoesBack: escape,
@@ -66,7 +64,9 @@ void main() {
   });
 
   group('iOS', () {
-    testWidgets('swipe from left edge goes back (default material page)', (t) async {
+    testWidgets('swipe from left edge goes back (default material page)', (
+      t,
+    ) async {
       await openA(t);
       await t.dragFrom(const Offset(5, 300), const Offset(500, 0));
       await t.pumpAndSettle();
@@ -111,7 +111,10 @@ void main() {
 
     testWidgets('mouse back button goes back, respects PopScope', (t) async {
       await openA(t);
-      final g = await t.createGesture(kind: PointerDeviceKind.mouse, buttons: kBackMouseButton);
+      final g = await t.createGesture(
+        kind: PointerDeviceKind.mouse,
+        buttons: kBackMouseButton,
+      );
       await g.down(const Offset(100, 100));
       await g.up();
       await t.pumpAndSettle();
@@ -135,7 +138,10 @@ void main() {
       await t.pumpAndSettle();
       OmniRoute.push('/a');
       await t.pumpAndSettle();
-      showDialog<void>(context: t.element(find.text('page a')), builder: (_) => const Text('dialog'));
+      showDialog<void>(
+        context: t.element(find.text('page a')),
+        builder: (_) => const Text('dialog'),
+      );
       await t.pumpAndSettle();
       await t.sendKeyEvent(LogicalKeyboardKey.escape);
       await t.pumpAndSettle();
@@ -153,15 +159,25 @@ void main() {
       await t.pumpAndSettle();
       OmniRoute.push('/a');
       await t.pumpAndSettle();
-      expect(t.widget<Navigator>(find.byType(Navigator)).pages.last, isA<CupertinoPage<void>>());
+      expect(
+        t.widget<Navigator>(find.byType(Navigator)).pages.last,
+        isA<CupertinoPage<void>>(),
+      );
       OmniRoute.push('/fade');
       final frames = await t.pumpAndSettle();
-      expect(frames, lessThanOrEqualTo(2), reason: 'per-route none = no animation');
+      expect(
+        frames,
+        lessThanOrEqualTo(2),
+        reason: 'per-route none = no animation',
+      );
     });
 
     testWidgets('default material page uses platform transitions', (t) async {
       await openA(t);
-      expect(t.widget<Navigator>(find.byType(Navigator)).pages.last, isA<MaterialPage<void>>());
+      expect(
+        t.widget<Navigator>(find.byType(Navigator)).pages.last,
+        isA<MaterialPage<void>>(),
+      );
     }, variant: TargetPlatformVariant.all());
   });
 }

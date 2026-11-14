@@ -22,23 +22,36 @@ class TagBloc extends Bloc<int, int> {
 }
 
 /// state 1 = logged in, 2 = admin.
-class AuthBloc extends TagBloc { AuthBloc() : super('auth'); }
-class ShellBloc extends TagBloc { ShellBloc() : super('shell'); }
-class TabBloc extends TagBloc { TabBloc() : super('tab'); }
+class AuthBloc extends TagBloc {
+  AuthBloc() : super('auth');
+}
+
+class ShellBloc extends TagBloc {
+  ShellBloc() : super('shell');
+}
+
+class TabBloc extends TagBloc {
+  TabBloc() : super('tab');
+}
 
 class S extends OmniStatelessWidget {
   const S(this.label, {super.key, this.blocs = const []});
   final String label;
   final List<Provide> blocs;
-  @override String get screenName => label;
-  @override List<Provide> get provide => blocs;
-  @override Widget build(BuildContext context) => Text(label);
+  @override
+  String get screenName => label;
+  @override
+  List<Provide> get provide => blocs;
+  @override
+  Widget build(BuildContext context) => Text(label);
 }
 
 class Counter extends StatefulWidget {
   const Counter({super.key});
-  @override State<Counter> createState() => _CounterState();
+  @override
+  State<Counter> createState() => _CounterState();
 }
+
 class _CounterState extends State<Counter> {
   int n = 0;
   @override
@@ -48,9 +61,12 @@ class _CounterState extends State<Counter> {
 
 class TabScreen extends OmniStatelessWidget {
   const TabScreen({super.key});
-  @override String get screenName => 'Tab';
-  @override List<Provide> get provide => const [Provide<TabBloc>(lazy: false)];
-  @override Widget build(BuildContext context) => const Counter();
+  @override
+  String get screenName => 'Tab';
+  @override
+  List<Provide> get provide => const [Provide<TabBloc>(lazy: false)];
+  @override
+  Widget build(BuildContext context) => const Counter();
 }
 
 class AuthGuard extends OmniGuard {
@@ -61,7 +77,9 @@ class AuthGuard extends OmniGuard {
   String? redirect(BuildContext c, GoRouterState s) {
     final loggedIn = c.read<AuthBloc>().state >= 1;
     final atLogin = s.matchedLocation == '/login';
-    if (!loggedIn && !atLogin) return '/login?from=${Uri.encodeComponent(s.uri.toString())}';
+    if (!loggedIn && !atLogin) {
+      return '/login?from=${Uri.encodeComponent(s.uri.toString())}';
+    }
     if (loggedIn && atLogin) return s.uri.queryParameters['from'] ?? '/';
     return null;
   }
@@ -74,56 +92,92 @@ final adminOnly = OmniGuard.fn((c, s) async {
 
 late BuildContext rootContext;
 
-Widget buildApp({List<OmniGuard> guards = const [AuthGuard()], String initial = '/'}) => OmniApp(
-      initialRoute: initial,
-      guards: guards,
-      blocs: [
-        OmniBloc<AuthBloc>((_) => AuthBloc(), global: true, lazy: false),
-        OmniBloc<ShellBloc>((_) => ShellBloc()),
-        OmniBloc<TabBloc>((_) => TabBloc()),
-      ],
+Widget buildApp({
+  List<OmniGuard> guards = const [AuthGuard()],
+  String initial = '/',
+}) => OmniApp(
+  initialRoute: initial,
+  guards: guards,
+  blocs: [
+    OmniBloc<AuthBloc>((_) => AuthBloc(), global: true, lazy: false),
+    OmniBloc<ShellBloc>((_) => ShellBloc()),
+    OmniBloc<TabBloc>((_) => TabBloc()),
+  ],
+  routes: [
+    OmniPage('/login', (_) => const S('login')),
+    OmniPage('/denied', (_) => const S('denied')),
+    OmniPage('/admin', (_) => const S('admin'), guards: [adminOnly]),
+    OmniPage(
+      '/loop',
+      (_) => const S('loop'),
+      guards: [OmniGuard.fn((_, _) => '/loop2')],
+    ),
+    OmniPage(
+      '/loop2',
+      (_) => const S('loop2'),
+      guards: [OmniGuard.fn((_, _) => '/loop')],
+    ),
+    OmniPage(
+      '/self',
+      (_) => const S('self'),
+      guards: [OmniGuard.fn((_, _) => '/self')],
+    ),
+    OmniShell(
+      provide: const [Provide<ShellBloc>(lazy: false)],
+      builder: (c, s, child) => Column(
+        children: [
+          const Text('shell'),
+          Expanded(child: child),
+        ],
+      ),
       routes: [
-        OmniPage('/login', (_) => const S('login')),
-        OmniPage('/denied', (_) => const S('denied')),
-        OmniPage('/admin', (_) => const S('admin'), guards: [adminOnly]),
-        OmniPage('/loop', (_) => const S('loop'), guards: [OmniGuard.fn((_, _) => '/loop2')]),
-        OmniPage('/loop2', (_) => const S('loop2'), guards: [OmniGuard.fn((_, _) => '/loop')]),
-        OmniPage('/self', (_) => const S('self'), guards: [OmniGuard.fn((_, _) => '/self')]),
-        OmniShell(
-          provide: const [Provide<ShellBloc>(lazy: false)],
-          builder: (c, s, child) => Column(children: [const Text('shell'), Expanded(child: child)]),
-          routes: [
-            OmniPage('/', (_) => const S('home')),
-            OmniPage('/students/:id', (p) => S('student ${p.path('id')} ${p.query('tab')}')),
-          ],
-        ),
-        OmniStatefulShell(
-          builder: (c, s, shell) {
-            rootContext = c;
-            return Scaffold(
-              body: shell,
-              bottomNavigationBar: Row(children: [
-                TextButton(onPressed: () => shell.goBranch(0), child: const Text('tab A')),
-                TextButton(onPressed: () => shell.goBranch(1), child: const Text('tab B')),
-              ]),
-            );
-          },
-          branches: [
-            StatefulShellBranch(routes: [OmniPage('/a', (_) => const TabScreen())]),
-            StatefulShellBranch(routes: [OmniPage('/b', (_) => const S('page b'))]),
-          ],
+        OmniPage('/', (_) => const S('home')),
+        OmniPage(
+          '/students/:id',
+          (p) => S('student ${p.path('id')} ${p.query('tab')}'),
         ),
       ],
-      builder: (_, router) => MaterialApp.router(routerConfig: router),
-    );
+    ),
+    OmniStatefulShell(
+      builder: (c, s, shell) {
+        rootContext = c;
+        return Scaffold(
+          body: shell,
+          bottomNavigationBar: Row(
+            children: [
+              TextButton(
+                onPressed: () => shell.goBranch(0),
+                child: const Text('tab A'),
+              ),
+              TextButton(
+                onPressed: () => shell.goBranch(1),
+                child: const Text('tab B'),
+              ),
+            ],
+          ),
+        );
+      },
+      branches: [
+        StatefulShellBranch(routes: [OmniPage('/a', (_) => const TabScreen())]),
+        StatefulShellBranch(routes: [OmniPage('/b', (_) => const S('page b'))]),
+      ],
+    ),
+  ],
+  builder: (_, router) => MaterialApp.router(routerConfig: router),
+);
 
 AuthBloc auth(WidgetTester t) =>
     t.element(find.byType(Navigator).first).read<AuthBloc>();
 
 void main() {
-  setUp(() { created.clear(); closed.clear(); });
+  setUp(() {
+    created.clear();
+    closed.clear();
+  });
 
-  testWidgets('auth guard: login redirect keeps target, reacts to bloc', (t) async {
+  testWidgets('auth guard: login redirect keeps target, reacts to bloc', (
+    t,
+  ) async {
     await t.pumpWidget(buildApp(initial: '/students/9?tab=x'));
     await t.pumpAndSettle();
     expect(find.text('login'), findsOneWidget);
@@ -153,7 +207,9 @@ void main() {
     expect(find.text('admin'), findsOneWidget);
   });
 
-  testWidgets('self redirect ignored; redirect loop shows error page', (t) async {
+  testWidgets('self redirect ignored; redirect loop shows error page', (
+    t,
+  ) async {
     await t.pumpWidget(buildApp(guards: const []));
     OmniRoute.go('/self');
     await t.pumpAndSettle();
@@ -164,20 +220,25 @@ void main() {
     expect(find.textContaining('redirect loop'), findsOneWidget);
   });
 
-  testWidgets('shell bloc lives across child routes, closes when shell leaves', (t) async {
-    await t.pumpWidget(buildApp(guards: const []));
-    await t.pumpAndSettle();
-    expect(find.text('shell'), findsOneWidget);
-    OmniRoute.go('/students/1');
-    await t.pumpAndSettle();
-    expect(find.text('student 1 null'), findsOneWidget);
-    expect(created['shell'], 1);
-    OmniRoute.go('/login');
-    await t.pumpAndSettle();
-    expect(closed['shell'], 1);
-  });
+  testWidgets(
+    'shell bloc lives across child routes, closes when shell leaves',
+    (t) async {
+      await t.pumpWidget(buildApp(guards: const []));
+      await t.pumpAndSettle();
+      expect(find.text('shell'), findsOneWidget);
+      OmniRoute.go('/students/1');
+      await t.pumpAndSettle();
+      expect(find.text('student 1 null'), findsOneWidget);
+      expect(created['shell'], 1);
+      OmniRoute.go('/login');
+      await t.pumpAndSettle();
+      expect(closed['shell'], 1);
+    },
+  );
 
-  testWidgets('stateful shell keeps tab state and blocs over 50 switches', (t) async {
+  testWidgets('stateful shell keeps tab state and blocs over 50 switches', (
+    t,
+  ) async {
     await t.pumpWidget(buildApp(guards: const [], initial: '/a'));
     await t.pumpAndSettle();
     await t.tap(find.text('count 0'));
@@ -198,10 +259,17 @@ void main() {
   testWidgets('deep link from platform opens screen with params', (t) async {
     await t.pumpWidget(buildApp(guards: const []));
     await t.pumpAndSettle();
-    final msg = const JSONMethodCodec().encodeMethodCall(const MethodCall(
-        'pushRouteInformation', {'location': '/students/55?tab=grades', 'state': null}));
-    await t.binding.defaultBinaryMessenger
-        .handlePlatformMessage('flutter/navigation', msg, (_) {});
+    final msg = const JSONMethodCodec().encodeMethodCall(
+      const MethodCall('pushRouteInformation', {
+        'location': '/students/55?tab=grades',
+        'state': null,
+      }),
+    );
+    await t.binding.defaultBinaryMessenger.handlePlatformMessage(
+      'flutter/navigation',
+      msg,
+      (_) {},
+    );
     await t.pumpAndSettle();
     expect(find.text('student 55 grades'), findsOneWidget);
   });

@@ -1,17 +1,17 @@
 # Release checklist & validation report
 
-## Status at 0.1.0
+## Status at 0.2.0
 
 | Check | Result |
 |---|---|
 | `flutter analyze` (package, with `public_member_api_docs`) | no issues |
 | `flutter analyze` (example) | no issues |
-| Package tests (leak tracking on) | 56 passed |
+| Package tests (leak tracking on) | 78 passed |
 | Example flow test | 1 passed |
 | `dart doc` | 0 warnings, 0 errors |
 | `dart pub publish --dry-run` | 1 warning: no `homepage`/`repository` |
 | Example builds | Android APK, iOS simulator, macOS release, web |
-| Live runs | web (browser), iOS simulator |
+| Live runs | web (browser), iOS simulator (both on 0.1.0; 0.2 changes verified by tests) |
 
 ## Spec acceptance criteria
 
