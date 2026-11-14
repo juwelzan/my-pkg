@@ -62,11 +62,14 @@ OmniMock fakeBackend() {
       users[users.length + 1] = name;
       return MockResponse.json({'id': users.length, 'name': name}, status: 201);
     })
-    ..get('/flaky', OmniMock.sequence([
-      const MockResponse.offline(),
-      const MockResponse.status(503),
-      MockResponse.json({'ok': true}),
-    ]));
+    ..get(
+      '/flaky',
+      OmniMock.sequence([
+        const MockResponse.offline(),
+        const MockResponse.status(503),
+        MockResponse.json({'ok': true}),
+      ]),
+    );
 }
 
 Future<void> main() async {
@@ -130,8 +133,20 @@ Future<void> main() async {
   print('6. state: ${state.state}');
   await state.close();
 
-  // 7. A redacted cURL command for bug reports.
-  print('7. ${api.toCurl(const OmniRequest.get('/users/2', query: {'api_key': 'secret'}))}');
+  // 7. Per-call options: no auth, no retry, full response.
+  final res = await api.getResponse<User>(
+    '/users/3',
+    decoder: User.fromJson,
+    retry: RetryPolicy.none,
+    cache: CachePolicy.noCache,
+  );
+  print(
+    '7. ${res.statusCode} ${res.data} in ${res.duration.inMilliseconds} ms',
+  );
+  final anonymous = await api
+      .get<User>('/users/3', decoder: User.fromJson, auth: false)
+      .asResult();
+  print('   without auth: ${anonymous is Err ? 'rejected (401)' : 'ok'}');
 
   await api.close();
 }

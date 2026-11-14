@@ -131,67 +131,6 @@ void main() {
     });
   });
 
-  group('request builder', () {
-    test('builds and sends', () async {
-      final token = OmniCancelToken();
-      final b = api
-          .request('/users')
-          .query('page', 2)
-          .queryAll({
-            'tag': ['a', 'b'],
-          })
-          .header('X-Trace', 't1')
-          .timeout(const Duration(seconds: 5))
-          .cancelToken(token)
-          .retry(RetryPolicy.none)
-          .cache(CachePolicy.noCache);
-      final r = b.build();
-      expect(r.method, HttpMethod.get);
-      expect(r.query, {
-        'page': 2,
-        'tag': ['a', 'b'],
-      });
-      expect(r.timeout, const Duration(seconds: 5));
-      expect(r.cancelToken, same(token));
-      expect(r.retry, same(RetryPolicy.none));
-      expect(r.cachePolicy, CachePolicy.noCache);
-      final list = await b.sendList<User>(decoder: User.fromJson);
-      expect(list.single.name, 'A');
-      expect(mock.requests.last.headers['x-trace'], 't1');
-    });
-
-    test('json, form, text, bytes bodies', () async {
-      await api
-          .request('/users', method: HttpMethod.post)
-          .json({'name': 'B'})
-          .send<User>(decoder: User.fromJson);
-      expect(utf8.decode(mock.requests.last.body!), '{"name":"B"}');
-
-      await api.request('/login', method: HttpMethod.post).form({
-        'user': 'a b',
-        'password': 'p&q',
-      }).sendRaw();
-      expect(utf8.decode(mock.requests.last.body!), 'user=a+b&password=p%26q');
-      expect(
-        mock.requests.last.headers['content-type'],
-        'application/x-www-form-urlencoded',
-      );
-
-      await api.request('/t', method: HttpMethod.put).text('hi').sendRaw();
-      expect(
-        mock.requests.last.headers['content-type'],
-        'text/plain; charset=utf-8',
-      );
-
-      await api.request('/b', method: HttpMethod.put).bytes([1, 2]).sendRaw();
-      expect(mock.requests.last.body, [1, 2]);
-    });
-
-    test('skipAuth', () {
-      expect(api.request('/p').skipAuth().build().skipAuth, isTrue);
-    });
-  });
-
   group('cURL export', () {
     test('redacts secrets by default', () {
       final curl = api.toCurl(
@@ -233,13 +172,6 @@ void main() {
         ),
       );
       expect(mp, contains('not included'));
-    });
-
-    test('builder toCurl', () {
-      expect(
-        api.request('/x').query('a', 1).toCurl(),
-        contains("'https://api.example.com/v1/x?a=1'"),
-      );
     });
   });
 

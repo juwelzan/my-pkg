@@ -76,7 +76,6 @@ const advancedOnly = [
   'JsonDecoder',
   'ProgressCallback',
   'CurlImport',
-  'OmniRequestBuilder',
 ];
 
 const testingOnly = [
@@ -115,7 +114,55 @@ Future<Set<String>> undefined(List<String> imports, List<String> names) async {
   }
 }
 
+/// Analyzes calls of the low-level methods under [import]; returns the
+/// method names reported as undefined.
+Future<Set<String>> undefinedMethods(String import) async {
+  const methods = [
+    'sendRaw',
+    'send',
+    'sendList',
+    'openStream',
+    'toCurl',
+    'resolve',
+  ];
+  final file = File('test/_surface_m_$pid.dart');
+  await file.writeAsString(
+    [
+      "import 'package:omni_network/$import';",
+      'void f(OmniNetwork api, OmniRequest r) {',
+      for (final m in methods) '  api.$m(r);',
+      '}',
+    ].join('\n'),
+  );
+  try {
+    final r = await Process.run('dart', [
+      'analyze',
+      '--format=machine',
+      file.path,
+    ]);
+    final out = '${r.stdout}${r.stderr}';
+    return {
+      for (final m in methods)
+        if (out.contains("The method '$m' isn't defined")) m,
+    };
+  } finally {
+    await file.delete();
+  }
+}
+
 void main() {
+  test('low-level methods only appear with advanced.dart', () async {
+    expect(await undefinedMethods('omni_network.dart'), {
+      'sendRaw',
+      'send',
+      'sendList',
+      'openStream',
+      'toCurl',
+      'resolve',
+    });
+    expect(await undefinedMethods('advanced.dart'), isEmpty);
+  });
+
   test('simple import exposes the app names', () async {
     expect(await undefined(['omni_network.dart'], simple), isEmpty);
   });

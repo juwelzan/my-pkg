@@ -30,7 +30,7 @@ such as a hand-written `fromJson` or one from `json_serializable`/`freezed`.
 - [Cache and request de-duplication](#cache-and-request-de-duplication)
 - [Request state for UIs](#request-state-for-uis)
 - [Offline queue](#offline-queue)
-- [Endpoints, builder, cURL](#endpoints-builder-curl)
+- [Endpoints and cURL](#endpoints-and-curl)
 - [Testing with OmniMock](#testing-with-omnimock)
 - [Safe defaults](#safe-defaults)
 - [Platforms](#platforms)
@@ -77,14 +77,21 @@ await api.delete<void>('/users/10');
 // JSON, and void or a nullable type accepts an empty body.
 final count = await api.get<int>('/users/count');
 
-// The full response: status, headers, duration and source.
-final res = await api.send<User>(const OmniRequest.get('/users/10'),
-    decoder: User.fromJson);
-print('${res.statusCode} ${res.headers['etag']} ${res.duration}');
+// Every verb takes the same per-call options.
+final me = await api.get<User>('/me',
+    decoder: User.fromJson,
+    query: {'expand': 'roles'},
+    headers: {'X-Trace': traceId},
+    timeout: const Duration(seconds: 5),
+    cancelToken: token,
+    retry: RetryPolicy.none,          // or a policy just for this call
+    cache: CachePolicy.networkFirst,  // GET only, needs `cache:` on the client
+    auth: false);                     // no token (login, public endpoints)
 
-// The raw response is returned for every status code; nothing is thrown
-// for 4xx/5xx.
-final raw = await api.sendRaw(const OmniRequest.get('/health'));
+// The full response (status, headers, duration, source):
+final res = await api.getResponse<User>('/users/10', decoder: User.fromJson);
+print('${res.statusCode} ${res.headers['etag']} ${res.duration} ${res.source}');
+// Also: postResponse, putResponse, patchResponse, deleteResponse.
 ```
 
 JSON envelopes such as `{"data": ..., "meta": ...}` are unwrapped with
@@ -255,8 +262,7 @@ The pager is safe to call from UI code:
 ```dart
 OmniNetwork(baseUrl: url, cache: OmniCache());     // CachePolicy.standard
 api.get<User>('/me', decoder: User.fromJson);      // standard HTTP caching
-api.sendRaw(const OmniRequest.get('/feed',
-    cachePolicy: CachePolicy.staleWhileRevalidate));
+api.get<List<dynamic>>('/feed', cache: CachePolicy.staleWhileRevalidate);
 ```
 
 - **Standard policy.** Follows RFC 9111: `max-age`, `Age`, `Expires`,
@@ -320,7 +326,7 @@ Rules:
   temporary failure.
 - **Persistence.** Implement `QueueStore` and save `QueuedRequest.toJson()`.
 
-## Endpoints, builder, cURL
+## Endpoints and cURL
 
 ```dart
 abstract final class UserApi {
@@ -328,10 +334,9 @@ abstract final class UserApi {
 }
 final u = await api.call(UserApi.byId, path: {'id': 10});
 
-final list = await api.request('/users').query('page', 2)
-    .header('X-Trace', id).sendList<User>(decoder: User.fromJson);
-
-print(api.toCurl(request));                 // secrets redacted by default
+// advanced.dart: low-level calls and cURL.
+final raw = await api.sendRaw(const OmniRequest.get('/health')); // any status, no decoding
+print(api.toCurl(const OmniRequest.get('/users'))); // secrets redacted by default
 final imported = parseCurl(copiedFromBrowser).request;
 ```
 

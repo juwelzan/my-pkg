@@ -4,7 +4,6 @@ import 'dart:typed_data';
 
 import '../auth/bearer_auth.dart';
 import '../cache/omni_cache.dart';
-import '../builder/request_builder.dart';
 import '../curl/curl.dart';
 import '../endpoint/endpoint.dart';
 import '../log/network_log.dart';
@@ -30,6 +29,8 @@ import 'omni_network_exception.dart';
 import 'omni_request.dart';
 import 'omni_response.dart';
 import 'response_adapter.dart';
+
+part 'omni_network_advanced.dart';
 
 /// An HTTP client. Independent of Flutter, routing and state management.
 ///
@@ -156,7 +157,7 @@ final class OmniNetwork {
   ///
   /// Throws [HttpFailure] for non-2xx, [DecodeFailure] for a bad body, and
   /// everything [sendRaw] throws.
-  Future<OmniResponse<T>> send<T>(
+  Future<OmniResponse<T>> _send<T>(
     OmniRequest request, {
     JsonDecoder<T>? decoder,
     ResponseAdapter? adapter,
@@ -169,7 +170,7 @@ final class OmniNetwork {
   }
 
   /// Like [send] for a JSON array of objects.
-  Future<OmniResponse<List<T>>> sendList<T>(
+  Future<OmniResponse<List<T>>> _sendList<T>(
     OmniRequest request, {
     required JsonDecoder<T> decoder,
     ResponseAdapter? adapter,
@@ -181,11 +182,26 @@ final class OmniNetwork {
     );
   }
 
-  /// GET [path] decoded into `T`. See [send].
+  // ------------------------------------------------------------ verbs
+  //
+  // Every verb takes the same per-call options:
+  //   query, headers, timeout, cancelToken — as usual;
+  //   retry — RetryPolicy for this call (RetryPolicy.none disables);
+  //   cache — CachePolicy for this GET (needs `cache:` on the client);
+  //   auth — false sends this call without the client's token (login,
+  //          public endpoints);
+  //   adapter — response envelope adapter for this call.
+  // `xxxResponse` variants return the full [OmniResponse] (status,
+  // headers, duration, source) instead of just the data.
+
+  /// GETs [path] and decodes the body into `T`.
   ///
   /// ```dart
   /// final user = await api.get<User>('/users/10', decoder: User.fromJson);
   /// ```
+  ///
+  /// Without [decoder]: `String` returns the text; `int`, `Map`, `List`
+  /// are cast from JSON; `void` or a nullable `T` accept an empty body.
   Future<T> get<T>(
     String path, {
     JsonDecoder<T>? decoder,
@@ -193,20 +209,53 @@ final class OmniNetwork {
     Map<String, String> headers = const {},
     Duration? timeout,
     OmniCancelToken? cancelToken,
+    RetryPolicy? retry,
+    CachePolicy? cache,
+    bool auth = true,
     ResponseAdapter? adapter,
-  }) async => (await send<T>(
-    OmniRequest.get(
-      path,
-      query: query,
-      headers: headers,
-      timeout: timeout,
-      cancelToken: cancelToken,
-    ),
+  }) async => (await getResponse<T>(
+    path,
     decoder: decoder,
+    query: query,
+    headers: headers,
+    timeout: timeout,
+    cancelToken: cancelToken,
+    retry: retry,
+    cache: cache,
+    auth: auth,
     adapter: adapter,
   )).data;
 
-  /// GET [path] decoded into `List<T>`. See [sendList].
+  /// Like [get] but returns the full [OmniResponse].
+  Future<OmniResponse<T>> getResponse<T>(
+    String path, {
+    JsonDecoder<T>? decoder,
+    Map<String, Object?> query = const {},
+    Map<String, String> headers = const {},
+    Duration? timeout,
+    OmniCancelToken? cancelToken,
+    RetryPolicy? retry,
+    CachePolicy? cache,
+    bool auth = true,
+    ResponseAdapter? adapter,
+  }) => _send<T>(
+    _req(
+      HttpMethod.get,
+      path,
+      null,
+      query,
+      headers,
+      timeout,
+      cancelToken,
+      retry,
+      cache,
+      auth,
+    ),
+    decoder: decoder,
+    adapter: adapter,
+  );
+
+  /// GETs a JSON array at [path] and decodes each item with [decoder].
   Future<List<T>> getList<T>(
     String path, {
     required JsonDecoder<T> decoder,
@@ -214,20 +263,28 @@ final class OmniNetwork {
     Map<String, String> headers = const {},
     Duration? timeout,
     OmniCancelToken? cancelToken,
+    RetryPolicy? retry,
+    CachePolicy? cache,
+    bool auth = true,
     ResponseAdapter? adapter,
-  }) async => (await sendList<T>(
-    OmniRequest.get(
+  }) async => (await _sendList<T>(
+    _req(
+      HttpMethod.get,
       path,
-      query: query,
-      headers: headers,
-      timeout: timeout,
-      cancelToken: cancelToken,
+      null,
+      query,
+      headers,
+      timeout,
+      cancelToken,
+      retry,
+      cache,
+      auth,
     ),
     decoder: decoder,
     adapter: adapter,
   )).data;
 
-  /// POST [body] to [path]; decodes the response into `T`. See [send].
+  /// POSTs [body] (JSON value, `String` or bytes) and decodes the response.
   Future<T> post<T>(
     String path, {
     Object? body,
@@ -236,20 +293,52 @@ final class OmniNetwork {
     Map<String, String> headers = const {},
     Duration? timeout,
     OmniCancelToken? cancelToken,
+    RetryPolicy? retry,
+    bool auth = true,
     ResponseAdapter? adapter,
-  }) => _body<T>(
-    HttpMethod.post,
+  }) async => (await postResponse<T>(
     path,
-    body,
-    decoder,
-    query,
-    headers,
-    timeout,
-    cancelToken,
-    adapter,
+    body: body,
+    decoder: decoder,
+    query: query,
+    headers: headers,
+    timeout: timeout,
+    cancelToken: cancelToken,
+    retry: retry,
+    auth: auth,
+    adapter: adapter,
+  )).data;
+
+  /// Like [post] but returns the full [OmniResponse].
+  Future<OmniResponse<T>> postResponse<T>(
+    String path, {
+    Object? body,
+    JsonDecoder<T>? decoder,
+    Map<String, Object?> query = const {},
+    Map<String, String> headers = const {},
+    Duration? timeout,
+    OmniCancelToken? cancelToken,
+    RetryPolicy? retry,
+    bool auth = true,
+    ResponseAdapter? adapter,
+  }) => _send<T>(
+    _req(
+      HttpMethod.post,
+      path,
+      body,
+      query,
+      headers,
+      timeout,
+      cancelToken,
+      retry,
+      null,
+      auth,
+    ),
+    decoder: decoder,
+    adapter: adapter,
   );
 
-  /// PUT [body] to [path]; decodes the response into `T`. See [send].
+  /// PUTs [body] and decodes the response.
   Future<T> put<T>(
     String path, {
     Object? body,
@@ -258,20 +347,52 @@ final class OmniNetwork {
     Map<String, String> headers = const {},
     Duration? timeout,
     OmniCancelToken? cancelToken,
+    RetryPolicy? retry,
+    bool auth = true,
     ResponseAdapter? adapter,
-  }) => _body<T>(
-    HttpMethod.put,
+  }) async => (await putResponse<T>(
     path,
-    body,
-    decoder,
-    query,
-    headers,
-    timeout,
-    cancelToken,
-    adapter,
+    body: body,
+    decoder: decoder,
+    query: query,
+    headers: headers,
+    timeout: timeout,
+    cancelToken: cancelToken,
+    retry: retry,
+    auth: auth,
+    adapter: adapter,
+  )).data;
+
+  /// Like [put] but returns the full [OmniResponse].
+  Future<OmniResponse<T>> putResponse<T>(
+    String path, {
+    Object? body,
+    JsonDecoder<T>? decoder,
+    Map<String, Object?> query = const {},
+    Map<String, String> headers = const {},
+    Duration? timeout,
+    OmniCancelToken? cancelToken,
+    RetryPolicy? retry,
+    bool auth = true,
+    ResponseAdapter? adapter,
+  }) => _send<T>(
+    _req(
+      HttpMethod.put,
+      path,
+      body,
+      query,
+      headers,
+      timeout,
+      cancelToken,
+      retry,
+      null,
+      auth,
+    ),
+    decoder: decoder,
+    adapter: adapter,
   );
 
-  /// PATCH [body] to [path]; decodes the response into `T`. See [send].
+  /// PATCHes [body] and decodes the response.
   Future<T> patch<T>(
     String path, {
     Object? body,
@@ -280,20 +401,52 @@ final class OmniNetwork {
     Map<String, String> headers = const {},
     Duration? timeout,
     OmniCancelToken? cancelToken,
+    RetryPolicy? retry,
+    bool auth = true,
     ResponseAdapter? adapter,
-  }) => _body<T>(
-    HttpMethod.patch,
+  }) async => (await patchResponse<T>(
     path,
-    body,
-    decoder,
-    query,
-    headers,
-    timeout,
-    cancelToken,
-    adapter,
+    body: body,
+    decoder: decoder,
+    query: query,
+    headers: headers,
+    timeout: timeout,
+    cancelToken: cancelToken,
+    retry: retry,
+    auth: auth,
+    adapter: adapter,
+  )).data;
+
+  /// Like [patch] but returns the full [OmniResponse].
+  Future<OmniResponse<T>> patchResponse<T>(
+    String path, {
+    Object? body,
+    JsonDecoder<T>? decoder,
+    Map<String, Object?> query = const {},
+    Map<String, String> headers = const {},
+    Duration? timeout,
+    OmniCancelToken? cancelToken,
+    RetryPolicy? retry,
+    bool auth = true,
+    ResponseAdapter? adapter,
+  }) => _send<T>(
+    _req(
+      HttpMethod.patch,
+      path,
+      body,
+      query,
+      headers,
+      timeout,
+      cancelToken,
+      retry,
+      null,
+      auth,
+    ),
+    decoder: decoder,
+    adapter: adapter,
   );
 
-  /// DELETE [path]; decodes the response into `T` (often `void`).
+  /// DELETEs [path] and decodes the response (often `void`).
   Future<T> delete<T>(
     String path, {
     Object? body,
@@ -302,71 +455,98 @@ final class OmniNetwork {
     Map<String, String> headers = const {},
     Duration? timeout,
     OmniCancelToken? cancelToken,
+    RetryPolicy? retry,
+    bool auth = true,
     ResponseAdapter? adapter,
-  }) => _body<T>(
-    HttpMethod.delete,
+  }) async => (await deleteResponse<T>(
     path,
-    body,
-    decoder,
-    query,
-    headers,
-    timeout,
-    cancelToken,
-    adapter,
+    body: body,
+    decoder: decoder,
+    query: query,
+    headers: headers,
+    timeout: timeout,
+    cancelToken: cancelToken,
+    retry: retry,
+    auth: auth,
+    adapter: adapter,
+  )).data;
+
+  /// Like [delete] but returns the full [OmniResponse].
+  Future<OmniResponse<T>> deleteResponse<T>(
+    String path, {
+    Object? body,
+    JsonDecoder<T>? decoder,
+    Map<String, Object?> query = const {},
+    Map<String, String> headers = const {},
+    Duration? timeout,
+    OmniCancelToken? cancelToken,
+    RetryPolicy? retry,
+    bool auth = true,
+    ResponseAdapter? adapter,
+  }) => _send<T>(
+    _req(
+      HttpMethod.delete,
+      path,
+      body,
+      query,
+      headers,
+      timeout,
+      cancelToken,
+      retry,
+      null,
+      auth,
+    ),
+    decoder: decoder,
+    adapter: adapter,
   );
 
-  /// HEAD [path]; returns the 2xx response (status and headers only).
+  /// HEADs [path]; returns the 2xx response (status and headers only).
   Future<OmniRawResponse> head(
     String path, {
     Map<String, Object?> query = const {},
     Map<String, String> headers = const {},
     Duration? timeout,
     OmniCancelToken? cancelToken,
+    RetryPolicy? retry,
+    bool auth = true,
   }) => _ok(
-    OmniRequest.head(
+    _req(
+      HttpMethod.head,
       path,
-      query: query,
-      headers: headers,
-      timeout: timeout,
-      cancelToken: cancelToken,
+      null,
+      query,
+      headers,
+      timeout,
+      cancelToken,
+      retry,
+      null,
+      auth,
     ),
   );
 
-  Future<T> _body<T>(
+  static OmniRequest _req(
     HttpMethod method,
     String path,
     Object? body,
-    JsonDecoder<T>? decoder,
     Map<String, Object?> query,
     Map<String, String> headers,
     Duration? timeout,
     OmniCancelToken? cancelToken,
-    ResponseAdapter? adapter,
-  ) async => (await send<T>(
-    OmniRequest(
-      method,
-      path,
-      body: body,
-      query: query,
-      headers: headers,
-      timeout: timeout,
-      cancelToken: cancelToken,
-    ),
-    decoder: decoder,
-    adapter: adapter,
-  )).data;
-
-  /// A fluent [OmniRequestBuilder] for [path] (GET unless [method]).
-  OmniRequestBuilder request(
-    String path, {
-    HttpMethod method = HttpMethod.get,
-  }) => OmniRequestBuilder(this, method, path);
-
-  /// [request] as a `curl` command with this client's base URL and default
-  /// headers. Secrets are redacted unless [redact] is `false`. Auth tokens
-  /// added by [auth] are not included (they are added at send time).
-  String toCurl(OmniRequest request, {bool redact = true}) =>
-      curlFor(resolve(request), redact: redact, redactor: redactor);
+    RetryPolicy? retry,
+    CachePolicy? cache,
+    bool auth,
+  ) => OmniRequest(
+    method,
+    path,
+    body: body,
+    query: query,
+    headers: headers,
+    timeout: timeout,
+    cancelToken: cancelToken,
+    retry: retry,
+    cachePolicy: cache,
+    skipAuth: !auth,
+  );
 
   /// Calls [endpoint] and returns its decoded result.
   ///
@@ -425,7 +605,7 @@ final class OmniNetwork {
     bool Function(T value)? isEmpty,
     bool autoLoad = true,
   }) => RequestController<T>(
-    (token) async => (await send<T>(
+    (token) async => (await _send<T>(
       OmniRequest.get(
         path,
         query: query,
@@ -448,7 +628,7 @@ final class OmniNetwork {
     CachePolicy? cachePolicy,
     bool autoLoad = true,
   }) => RequestController<List<T>>(
-    (token) async => (await sendList<T>(
+    (token) async => (await _sendList<T>(
       OmniRequest.get(
         path,
         query: query,
@@ -556,7 +736,7 @@ final class OmniNetwork {
   /// is no overall or idle timeout unless [timeout]/[idleTimeout] is given.
   /// Cancelling the body subscription (or [OmniStreamResponse.cancel], or
   /// the request's `cancelToken`) aborts the connection. Not retried.
-  Future<OmniStreamResponse> openStream(
+  Future<OmniStreamResponse> _openStream(
     OmniRequest request, {
     Duration? timeout,
     Duration? idleTimeout,
@@ -652,7 +832,7 @@ final class OmniNetwork {
   }
 
   Future<OmniRawResponse> _ok(OmniRequest request) async {
-    final raw = await sendRaw(request);
+    final raw = await _sendRaw(request);
     if (!raw.isSuccess) throw HttpFailure(raw);
     return raw;
   }
@@ -662,7 +842,7 @@ final class OmniNetwork {
   ///
   /// Throws an [OmniNetworkException]: [TimeoutFailure], [ConnectionFailure],
   /// [ClosedFailure] or [RequestFailure].
-  Future<OmniRawResponse> sendRaw(OmniRequest request) =>
+  Future<OmniRawResponse> _sendRaw(OmniRequest request) =>
       _pipeline(request, null);
 
   Future<OmniRawResponse> _pipeline(OmniRequest request, _Transfer? t) async {
@@ -815,12 +995,12 @@ final class OmniNetwork {
   Future<OmniRawResponse> _sendOnce(OmniRequest request, _Transfer? t) async {
     if (_closed) throw const ClosedFailure();
     final log = _logger;
-    if (log == null) return _network(resolve(request), request, t);
+    if (log == null) return _network(_resolve(request), request, t);
     final id = ++_logSeq;
     final watch = Stopwatch()..start();
     TransportRequest? resolved;
     try {
-      resolved = resolve(request);
+      resolved = _resolve(request);
       log.request(id, resolved);
       final response = await _network(resolved, request, t);
       log.response(id, resolved, response);
@@ -1037,7 +1217,7 @@ final class OmniNetwork {
 
   /// Builds the [TransportRequest] for [request] without sending it.
   /// Throws [RequestFailure] for an unresolvable URL or unsupported body.
-  TransportRequest resolve(OmniRequest request) {
+  TransportRequest _resolve(OmniRequest request) {
     final uri = _resolveUri(request);
     final merged = {...headers, ..._lower(request.headers)};
     final body = request.body;

@@ -139,3 +139,12 @@
   import); `OmniMock`/`MockTransport` moved to
   `package:omni_network/testing.dart`. `safeUri` is no longer exported.
   An analyzer-based test guards the split.
+- S2 (simplification): one way to call. `get/getList/post/put/patch/delete/
+  head` take every per-call option: `query`, `headers`, `timeout`,
+  `cancelToken`, `retry`, `cache` (GET), `auth: false` (no token, no
+  refresh), `adapter`. New `getResponse/postResponse/putResponse/
+  patchResponse/deleteResponse` return the full `OmniResponse`, which now
+  has `source`. **Breaking:** the fluent builder (`api.request(...)`,
+  `OmniRequestBuilder`) is removed; `send`, `sendList`, `sendRaw`,
+  `openStream`, `resolve` and `toCurl` moved to the `OmniNetworkAdvanced`
+  extension (`advanced.dart`).

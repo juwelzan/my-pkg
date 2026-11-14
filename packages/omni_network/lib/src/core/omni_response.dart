@@ -88,6 +88,9 @@ final class OmniResponse<T> {
   /// Time from sending to receiving the full body.
   Duration get duration => raw.duration;
 
+  /// Network, cache, or a `304` revalidation.
+  ResponseSource get source => raw.source;
+
   @override
   String toString() => 'OmniResponse<$T>($statusCode)';
 }

@@ -6,10 +6,10 @@ library;
 
 export 'omni_network.dart';
 
-export 'src/builder/request_builder.dart' show OmniRequestBuilder;
 export 'src/cache/cache_store.dart';
 export 'src/core/cancel_signal.dart' show CancelSignal;
 export 'src/core/decoding.dart' show JsonDecoder;
+export 'src/core/omni_network.dart' show OmniNetworkAdvanced;
 export 'src/core/response_adapter.dart';
 export 'src/curl/curl.dart' show parseCurl, CurlImport;
 export 'src/endpoint/endpoint.dart' show EndpointRegistry;
