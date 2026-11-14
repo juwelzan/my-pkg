@@ -75,6 +75,16 @@ final class DecodeFailure extends OmniNetworkException {
   final StackTrace? stackTrace;
 }
 
+/// Authentication failed and could not be recovered: the token refresh
+/// failed, threw or timed out (the refresh-failed callback has run).
+final class AuthFailure extends OmniNetworkException {
+  /// Creates an auth failure.
+  const AuthFailure(super.message, {super.uri, super.cause, this.response});
+
+  /// The 401 (or other expired-token) response that triggered the refresh.
+  final OmniRawResponse? response;
+}
+
 /// Removes user info, query and fragment so errors never leak secrets.
 Uri safeUri(Uri uri) => Uri(
   scheme: uri.scheme,

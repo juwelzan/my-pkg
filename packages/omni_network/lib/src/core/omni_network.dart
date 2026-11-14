@@ -2,10 +2,16 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
+import '../auth/bearer_auth.dart';
+import '../log/network_log.dart';
+import '../log/network_logger.dart';
+import '../log/redactor.dart';
 import '../transport/dio_transport.dart';
 import '../transport/transport.dart';
 import 'cancel_signal.dart';
+import 'cancel_token.dart';
 import 'decoding.dart';
+import 'interceptor.dart';
 import 'omni_network_exception.dart';
 import 'omni_request.dart';
 import 'omni_response.dart';
@@ -29,13 +35,34 @@ final class OmniNetwork {
   ///   transport you pass in is **not** closed by [close]; you own it.
   /// * [responseAdapter]: applied to every JSON body before decoding,
   ///   e.g. [EnvelopeResponseAdapter]; overridable per call.
+  /// * [enableLogging]: the single logging switch, default `false`. When
+  ///   off, nothing is formatted and [logSink] is never called. When on,
+  ///   every request, response and failure goes to [logSink] (default:
+  ///   [PrintLogSink]) after [redactor] masked secrets; [logBodies]
+  ///   includes redacted, truncated bodies. Redaction cannot be disabled.
+  /// * [interceptors]: see [OmniInterceptor].
+  /// * [auth]: token injection and single-flight refresh, see [BearerAuth].
   OmniNetwork({
     String? baseUrl,
     Map<String, String> headers = const {},
     this.timeout = const Duration(seconds: 30),
     Transport? transport,
     this.responseAdapter = const PlainResponseAdapter(),
-  }) : baseUri = baseUrl == null ? null : _parseBase(baseUrl),
+    this.enableLogging = false,
+    LogSink? logSink,
+    Redactor redactor = const Redactor(),
+    bool logBodies = true,
+    List<OmniInterceptor> interceptors = const [],
+    this.auth,
+  }) : interceptors = List.unmodifiable(interceptors),
+       _logger = enableLogging
+           ? NetworkLogger(
+               logSink ?? const PrintLogSink(),
+               redactor,
+               logBodies: logBodies,
+             )
+           : null,
+       baseUri = baseUrl == null ? null : _parseBase(baseUrl),
        headers = Map.unmodifiable(_lower(headers)),
        _transport = transport ?? DioTransport(),
        _ownsTransport = transport == null;
@@ -48,6 +75,18 @@ final class OmniNetwork {
 
   /// Default overall request timeout.
   final Duration timeout;
+
+  /// Interceptors, in `onRequest` order.
+  final List<OmniInterceptor> interceptors;
+
+  /// Token auth, or `null`.
+  final BearerAuth? auth;
+
+  /// Whether requests are logged. See the constructor.
+  final bool enableLogging;
+
+  final NetworkLogger? _logger;
+  int _logSeq = 0;
 
   /// Default [ResponseAdapter] for typed calls.
   final ResponseAdapter responseAdapter;
@@ -110,9 +149,11 @@ final class OmniNetwork {
     Map<String, Object?> query = const {},
     Map<String, String> headers = const {},
     Duration? timeout,
+    OmniCancelToken? cancelToken,
     ResponseAdapter? adapter,
   }) async => (await send<T>(
-    OmniRequest.get(path, query: query, headers: headers, timeout: timeout),
+    OmniRequest.get(path, query: query, headers: headers, timeout: timeout,
+        cancelToken: cancelToken),
     decoder: decoder,
     adapter: adapter,
   )).data;
@@ -124,9 +165,11 @@ final class OmniNetwork {
     Map<String, Object?> query = const {},
     Map<String, String> headers = const {},
     Duration? timeout,
+    OmniCancelToken? cancelToken,
     ResponseAdapter? adapter,
   }) async => (await sendList<T>(
-    OmniRequest.get(path, query: query, headers: headers, timeout: timeout),
+    OmniRequest.get(path, query: query, headers: headers, timeout: timeout,
+        cancelToken: cancelToken),
     decoder: decoder,
     adapter: adapter,
   )).data;
@@ -139,6 +182,7 @@ final class OmniNetwork {
     Map<String, Object?> query = const {},
     Map<String, String> headers = const {},
     Duration? timeout,
+    OmniCancelToken? cancelToken,
     ResponseAdapter? adapter,
   }) => _body<T>(
     HttpMethod.post,
@@ -148,6 +192,7 @@ final class OmniNetwork {
     query,
     headers,
     timeout,
+    cancelToken,
     adapter,
   );
 
@@ -159,6 +204,7 @@ final class OmniNetwork {
     Map<String, Object?> query = const {},
     Map<String, String> headers = const {},
     Duration? timeout,
+    OmniCancelToken? cancelToken,
     ResponseAdapter? adapter,
   }) => _body<T>(
     HttpMethod.put,
@@ -168,6 +214,7 @@ final class OmniNetwork {
     query,
     headers,
     timeout,
+    cancelToken,
     adapter,
   );
 
@@ -179,6 +226,7 @@ final class OmniNetwork {
     Map<String, Object?> query = const {},
     Map<String, String> headers = const {},
     Duration? timeout,
+    OmniCancelToken? cancelToken,
     ResponseAdapter? adapter,
   }) => _body<T>(
     HttpMethod.patch,
@@ -188,6 +236,7 @@ final class OmniNetwork {
     query,
     headers,
     timeout,
+    cancelToken,
     adapter,
   );
 
@@ -199,6 +248,7 @@ final class OmniNetwork {
     Map<String, Object?> query = const {},
     Map<String, String> headers = const {},
     Duration? timeout,
+    OmniCancelToken? cancelToken,
     ResponseAdapter? adapter,
   }) => _body<T>(
     HttpMethod.delete,
@@ -208,6 +258,7 @@ final class OmniNetwork {
     query,
     headers,
     timeout,
+    cancelToken,
     adapter,
   );
 
@@ -217,8 +268,10 @@ final class OmniNetwork {
     Map<String, Object?> query = const {},
     Map<String, String> headers = const {},
     Duration? timeout,
+    OmniCancelToken? cancelToken,
   }) => _ok(
-    OmniRequest.head(path, query: query, headers: headers, timeout: timeout),
+    OmniRequest.head(path, query: query, headers: headers, timeout: timeout,
+        cancelToken: cancelToken),
   );
 
   Future<T> _body<T>(
@@ -229,6 +282,7 @@ final class OmniNetwork {
     Map<String, Object?> query,
     Map<String, String> headers,
     Duration? timeout,
+    OmniCancelToken? cancelToken,
     ResponseAdapter? adapter,
   ) async => (await send<T>(
     OmniRequest(
@@ -238,6 +292,7 @@ final class OmniNetwork {
       query: query,
       headers: headers,
       timeout: timeout,
+      cancelToken: cancelToken,
     ),
     decoder: decoder,
     adapter: adapter,
@@ -256,7 +311,81 @@ final class OmniNetwork {
   /// [ClosedFailure] or [RequestFailure].
   Future<OmniRawResponse> sendRaw(OmniRequest request) async {
     if (_closed) throw const ClosedFailure();
-    final resolved = resolve(request);
+    var current = request;
+    try {
+      for (final i in interceptors) {
+        final r = current;
+        current = await _guard(() => i.onRequest(r));
+      }
+      var response = await _authorized(current);
+      for (final i in interceptors.reversed) {
+        final res = response;
+        final r = current;
+        response = await _guard(() => i.onResponse(r, res));
+      }
+      return response;
+    } on OmniNetworkException catch (e) {
+      for (final i in interceptors.reversed) {
+        try {
+          await i.onError(current, e);
+        } catch (_) {
+          // Keep the original failure.
+        }
+      }
+      rethrow;
+    }
+  }
+
+  Future<OmniRawResponse> _authorized(OmniRequest request) async {
+    final auth = this.auth;
+    if (auth == null ||
+        request.skipAuth ||
+        insideRefresh ||
+        request.header(auth.headerName) != null) {
+      return _sendOnce(request);
+    }
+    final used = await auth.current();
+    if (_closed) throw const ClosedFailure();
+    final first = await _sendOnce(auth.attach(request, used));
+    if (!auth.isExpired(first)) return first;
+    final fresh = await auth.recover(used, first);
+    if (_closed) throw const ClosedFailure();
+    return _sendOnce(auth.attach(request, fresh));
+  }
+
+  static Future<T> _guard<T>(FutureOr<T> Function() run) async {
+    try {
+      return await run();
+    } on OmniNetworkException {
+      rethrow;
+    } on Exception catch (e) {
+      throw RequestFailure('Interceptor threw ${e.runtimeType}', cause: e);
+    }
+  }
+
+  Future<OmniRawResponse> _sendOnce(OmniRequest request) async {
+    if (_closed) throw const ClosedFailure();
+    final log = _logger;
+    if (log == null) return _transmit(resolve(request), request);
+    final id = ++_logSeq;
+    final watch = Stopwatch()..start();
+    TransportRequest? resolved;
+    try {
+      resolved = resolve(request);
+      log.request(id, resolved);
+      final response = await _transmit(resolved, request);
+      log.response(id, resolved, response);
+      return response;
+    } on OmniNetworkException catch (e) {
+      log.error(id, resolved, request.method.verb, e, watch.elapsed);
+      rethrow;
+    }
+  }
+
+  Future<OmniRawResponse> _transmit(
+    TransportRequest resolved,
+    OmniRequest request,
+  ) async {
     final uri = safeUri(resolved.uri);
     final signal = CancelSignal();
     final limit = request.timeout ?? timeout;

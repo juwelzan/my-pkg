@@ -1,5 +1,7 @@
 import 'package:meta/meta.dart';
 
+import 'cancel_token.dart';
+
 /// HTTP methods supported by [OmniRequest].
 enum HttpMethod {
   /// GET
@@ -41,6 +43,8 @@ final class OmniRequest {
     this.headers = const {},
     this.body,
     this.timeout,
+    this.skipAuth = false,
+    this.cancelToken,
   });
 
   /// GET request.
@@ -49,12 +53,16 @@ final class OmniRequest {
     Map<String, Object?> query = const {},
     Map<String, String> headers = const {},
     Duration? timeout,
+    bool skipAuth = false,
+    OmniCancelToken? cancelToken,
   }) : this(
          HttpMethod.get,
          path,
          query: query,
          headers: headers,
          timeout: timeout,
+         skipAuth: skipAuth,
+         cancelToken: cancelToken,
        );
 
   /// POST request.
@@ -64,6 +72,8 @@ final class OmniRequest {
     Map<String, Object?> query = const {},
     Map<String, String> headers = const {},
     Duration? timeout,
+    bool skipAuth = false,
+    OmniCancelToken? cancelToken,
   }) : this(
          HttpMethod.post,
          path,
@@ -71,6 +81,8 @@ final class OmniRequest {
          query: query,
          headers: headers,
          timeout: timeout,
+         skipAuth: skipAuth,
+         cancelToken: cancelToken,
        );
 
   /// PUT request.
@@ -80,6 +92,8 @@ final class OmniRequest {
     Map<String, Object?> query = const {},
     Map<String, String> headers = const {},
     Duration? timeout,
+    bool skipAuth = false,
+    OmniCancelToken? cancelToken,
   }) : this(
          HttpMethod.put,
          path,
@@ -87,6 +101,8 @@ final class OmniRequest {
          query: query,
          headers: headers,
          timeout: timeout,
+         skipAuth: skipAuth,
+         cancelToken: cancelToken,
        );
 
   /// PATCH request.
@@ -96,6 +112,8 @@ final class OmniRequest {
     Map<String, Object?> query = const {},
     Map<String, String> headers = const {},
     Duration? timeout,
+    bool skipAuth = false,
+    OmniCancelToken? cancelToken,
   }) : this(
          HttpMethod.patch,
          path,
@@ -103,6 +121,8 @@ final class OmniRequest {
          query: query,
          headers: headers,
          timeout: timeout,
+         skipAuth: skipAuth,
+         cancelToken: cancelToken,
        );
 
   /// DELETE request.
@@ -112,6 +132,8 @@ final class OmniRequest {
     Map<String, Object?> query = const {},
     Map<String, String> headers = const {},
     Duration? timeout,
+    bool skipAuth = false,
+    OmniCancelToken? cancelToken,
   }) : this(
          HttpMethod.delete,
          path,
@@ -119,6 +141,8 @@ final class OmniRequest {
          query: query,
          headers: headers,
          timeout: timeout,
+         skipAuth: skipAuth,
+         cancelToken: cancelToken,
        );
 
   /// HEAD request.
@@ -127,12 +151,16 @@ final class OmniRequest {
     Map<String, Object?> query = const {},
     Map<String, String> headers = const {},
     Duration? timeout,
+    bool skipAuth = false,
+    OmniCancelToken? cancelToken,
   }) : this(
          HttpMethod.head,
          path,
          query: query,
          headers: headers,
          timeout: timeout,
+         skipAuth: skipAuth,
+         cancelToken: cancelToken,
        );
 
   /// HTTP method.
@@ -154,6 +182,58 @@ final class OmniRequest {
   /// Overall deadline for this request; overrides the client's timeout.
   final Duration? timeout;
 
+  /// When `true`, the client's auth (e.g. `BearerAuth`) neither adds a
+  /// token nor refreshes on 401 for this request. Requests made from inside
+  /// a refresh callback skip auth automatically.
+  final bool skipAuth;
+
+  /// Cancels this request when cancelled, see [OmniCancelToken].
+  final OmniCancelToken? cancelToken;
+
+  /// Copy with the given fields replaced.
+  OmniRequest copyWith({
+    HttpMethod? method,
+    String? path,
+    Map<String, Object?>? query,
+    Map<String, String>? headers,
+    Object? body = _unset,
+    Duration? timeout,
+    bool? skipAuth,
+    OmniCancelToken? cancelToken,
+  }) => OmniRequest(
+    method ?? this.method,
+    path ?? this.path,
+    query: query ?? this.query,
+    headers: headers ?? this.headers,
+    body: identical(body, _unset) ? this.body : body,
+    timeout: timeout ?? this.timeout,
+    skipAuth: skipAuth ?? this.skipAuth,
+  );
+
+  /// Copy with header [name] set to [value] (replacing any existing header
+  /// of that name, case-insensitively).
+  OmniRequest withHeader(String name, String value) {
+    final lower = name.toLowerCase();
+    return copyWith(
+      headers: {
+        for (final e in headers.entries)
+          if (e.key.toLowerCase() != lower) e.key: e.value,
+        name: value,
+      },
+    );
+  }
+
+  /// Value of header [name] (case-insensitive), or `null`.
+  String? header(String name) {
+    final lower = name.toLowerCase();
+    for (final e in headers.entries) {
+      if (e.key.toLowerCase() == lower) return e.value;
+    }
+    return null;
+  }
+
   @override
   String toString() => 'OmniRequest(${method.verb} $path)';
 }
+
+const Object _unset = Object();
