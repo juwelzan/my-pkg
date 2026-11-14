@@ -140,7 +140,7 @@ void main() {
 
     test('timeouts and connection errors retried; others not', () async {
       final mock = scripted([
-        const TimeoutFailure(Duration(seconds: 1)),
+        TimeoutFailure(const Duration(seconds: 1)),
         const ConnectionFailure('reset'),
         status(200),
       ]);
@@ -307,8 +307,9 @@ void main() {
       );
       final f = api.sendRaw(const OmniRequest.get('/a'));
       await Future<void>.delayed(const Duration(milliseconds: 20));
+      final failed = expectLater(f, throwsA(isA<ClosedFailure>()));
       await api.close();
-      await expectLater(f, throwsA(isA<ClosedFailure>()));
+      await failed;
       expect(api.pendingRequests, 0);
     });
 

@@ -6,6 +6,8 @@ import '../auth/bearer_auth.dart';
 import '../log/network_log.dart';
 import '../log/network_logger.dart';
 import '../log/redactor.dart';
+import '../paging/omni_pager.dart';
+import '../paging/pagination_strategy.dart';
 import '../resilience/circuit_breaker.dart';
 import '../resilience/retry_policy.dart';
 import '../transfer/download_target.dart';
@@ -331,6 +333,29 @@ final class OmniNetwork {
     decoder: decoder,
     adapter: adapter,
   )).data;
+
+  /// A pager over the list at [path]; see [OmniPager].
+  ///
+  /// [itemsKey] is the JSON path of the items in the full body (e.g.
+  /// `data`), so metadata such as `meta.next_cursor` stays visible to the
+  /// [strategy]. Without it, the client's response adapter result must be
+  /// the item array.
+  OmniPager<T> paginate<T>(
+    String path, {
+    required JsonDecoder<T> decoder,
+    required PaginationStrategy strategy,
+    String? itemsKey,
+    int? maxPages,
+    Map<String, Object?> query = const {},
+    Map<String, String> headers = const {},
+  }) => OmniPager<T>(
+    client: this,
+    request: OmniRequest.get(path, query: query, headers: headers),
+    strategy: strategy,
+    decoder: decoder,
+    itemsKey: itemsKey,
+    maxPages: maxPages,
+  );
 
   /// Uploads [files] and text [fields] as `multipart/form-data` and decodes
   /// the 2xx response into `T` (see [send]).

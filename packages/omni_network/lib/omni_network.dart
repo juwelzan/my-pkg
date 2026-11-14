@@ -16,6 +16,8 @@ export 'src/core/response_adapter.dart';
 export 'src/core/result.dart';
 export 'src/log/network_log.dart';
 export 'src/log/redactor.dart';
+export 'src/paging/omni_pager.dart';
+export 'src/paging/pagination_strategy.dart';
 export 'src/resilience/circuit_breaker.dart';
 export 'src/resilience/retry_policy.dart';
 export 'src/transfer/multipart.dart';

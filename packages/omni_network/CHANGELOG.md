@@ -42,3 +42,28 @@
   by default but fail after `idleTimeout` without progress.
 - `Transport.sendStreamed` + `StreamedResponse` (Dio and Mock implement it).
 - Logs summarise streamed/multipart bodies by size only.
+- Step 6: `RetryPolicy` (client `retry:` or per request `OmniRequest(retry:)`,
+  `RetryPolicy.none`): GET/HEAD only by default; PUT/DELETE opt-in via
+  `methods`; POST/PATCH only with an `Idempotency-Key` header **and**
+  `retryWithIdempotencyKey: true`. Retries 408/429/5xx-gateway statuses,
+  timeouts and connection errors; exponential backoff with cap and 50–100 %
+  jitter; honours `Retry-After` (seconds or HTTP date) and does not wait
+  beyond `maxRetryAfter`. Backoff waits are cancellable (token, `close`,
+  `cancelAll`). Each attempt is logged. Transfers are not auto-retried.
+- `CircuitBreaker` per host (`failureThreshold`, `openDuration`,
+  `halfOpenTrials`), `CircuitOpenFailure`, `stateOf(host)`.
+- `OmniNetwork.cancelAll()` (also requests waiting for a token refresh or a
+  retry) and `OmniCancelToken.child()`.
+- Fix: `OmniRequest.copyWith`/`withHeader` dropped `cancelToken`, so
+  cancelling did nothing for requests passing through `BearerAuth` or a
+  header-adding interceptor (Step 5 regression; test added).
+- Step 7: `api.paginate<T>()` → `OmniPager<T>` (`next`, `items`,
+  `hasMore`, `isLoading`, `refresh`, `reset`, `close`, `lastError`).
+  Concurrent `next()` calls share one request; a failed page keeps the state
+  so `next()` retries it; `refresh`/`reset` discard stale in-flight pages;
+  repeating cursors and `maxPages` stop runaway paging.
+- Strategies: `PagePagination` (short page / empty / `totalPagesKey` /
+  `hasMoreKey`), `OffsetPagination` (`totalKey`), `CursorPagination`
+  (`nextCursorKey` JSON path), `LinkHeaderPagination` (RFC 8288; refuses
+  next links to another origin so auth headers never leave the API host).
+  `itemsKey` JSON path (`data`, `result.items`) keeps metadata visible.
