@@ -1,0 +1,19 @@
+name: omni_network_openapi
+description: "Generates OmniNetwork endpoints and models from OpenAPI 3 specs (dev/CLI tool)."
+version: 0.1.0-dev
+publish_to: none
+
+environment:
+  sdk: ^3.12.0
+
+executables:
+  omni_network_openapi:
+
+dependencies:
+  yaml: ^3.1.4
+
+dev_dependencies:
+  lints: ^6.1.0
+  test: ^1.33.0
+  omni_network:
+    path: ../omni_network

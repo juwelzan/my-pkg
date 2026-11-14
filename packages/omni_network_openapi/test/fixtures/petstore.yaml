@@ -1,0 +1,140 @@
+openapi: 3.0.3
+info:
+  title: Pet Store
+  version: 1.2.0
+servers:
+  - url: https://petstore.example.com/v1
+paths:
+  /pets:
+    get:
+      operationId: listPets
+      summary: List all pets
+      tags: [pets]
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer }
+        - $ref: '#/components/parameters/TraceId'
+      responses:
+        '200':
+          description: A page of pets
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Pet' }
+    post:
+      operationId: createPet
+      summary: Create a pet
+      tags: [pets]
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/NewPet' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Pet' }
+  /pets/{pet-id}:
+    parameters:
+      - name: pet-id
+        in: path
+        required: true
+        schema: { type: integer }
+    get:
+      operationId: show_pet_by_id
+      summary: Info for a specific pet
+      tags: [pets]
+      responses:
+        '200':
+          description: The pet
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Pet' }
+    delete:
+      operationId: deletePet
+      deprecated: true
+      responses:
+        '204': { description: Deleted }
+  /pets/{petId}/photo:
+    post:
+      summary: Upload a photo
+      parameters:
+        - { name: petId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        content:
+          multipart/form-data:
+            schema: { type: object }
+      responses:
+        '200':
+          description: ok
+          content:
+            text/plain:
+              schema: { type: string }
+  /stats:
+    get:
+      operationId: getStats
+      responses:
+        '200':
+          description: Counts by status
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: { type: integer }
+components:
+  parameters:
+    TraceId:
+      name: X-Trace-Id
+      in: header
+      schema: { type: string }
+  schemas:
+    PetStatus:
+      type: string
+      description: Lifecycle status.
+      enum: [available, pending, sold-out, '2x']
+    NewPet:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, description: "The pet's name." }
+        tag: { type: string }
+        class: { type: string }
+        status: { $ref: '#/components/schemas/PetStatus' }
+    Pet:
+      description: A pet in the store.
+      allOf:
+        - $ref: '#/components/schemas/NewPet'
+        - type: object
+          required: [id, created_at]
+          properties:
+            id: { type: integer }
+            created_at: { type: string, format: date-time }
+            weight: { type: number, nullable: true }
+            vaccinated: { type: boolean }
+            tags: { type: array, items: { type: string } }
+            owner:
+              type: object
+              properties:
+                name: { type: string }
+                since: { type: string, format: date-time }
+            history:
+              type: array
+              items:
+                type: object
+                required: [at]
+                properties:
+                  at: { type: string, format: date-time }
+                  note: { type: string }
+            extra:
+              type: object
+              additionalProperties: true
+            variant:
+              oneOf:
+                - { type: string }
+                - { type: integer }
+    PetList:
+      type: array
+      items: { $ref: '#/components/schemas/Pet' }
