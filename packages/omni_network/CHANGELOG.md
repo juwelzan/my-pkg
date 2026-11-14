@@ -173,3 +173,22 @@
   builds never log unless `logInRelease: true`; `api.isLogging`.
   `NetworkLogRecord.note` and `.bytes`. The compact `PrintLogSink` stays in
   `advanced.dart`.
+- Hardening (security, memory, performance):
+  - **Redirects** are followed by OmniNetwork, not Dio: `Authorization`,
+    `Cookie` and `Proxy-Authorization` are removed when a redirect leaves
+    the original origin; HTTPS → HTTP downgrades are never followed; 303 (and
+    301/302 after POST) continue as GET without a body. `followRedirects`,
+    `maxRedirects` (default 5).
+  - **Auth cache**: authenticated entries are partitioned by the exact token
+    instead of `String.hashCode` (two users with colliding hashes could see
+    each other's cached data — regression test added); a persistent
+    `CacheStore` with `cacheAuthenticated` now requires `authScope`.
+  - **Large bodies**: JSON bodies ≥ 256 KB are parsed on a background isolate
+    (IO platforms) so the UI does not freeze; bodies > 64 KB are summarised
+    in logs instead of parsed for redaction.
+  - **Memory**: `OmniCancelToken.child()` children are held weakly (creating
+    a child per request on a long-lived token leaked them); the pretty log
+    buffer is bounded; stress test with 2000 mixed calls checks nothing is
+    left pending.
+  - Friendlier messages: `HttpFailure.message` includes the reason phrase
+    (`HTTP 404 Not Found`).

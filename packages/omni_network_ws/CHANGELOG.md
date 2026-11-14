@@ -8,3 +8,6 @@
   per-connect `headers` callback (IO only; browsers forbid handshake
   headers), `onOpen`, `states`, `jsonMessages`, `send` throws while
   disconnected unless `bufferWhileDisconnected` (bounded, ordered)).
+- Hardening: `SseParser(maxEventBytes:)` (default 1 MB) drops oversized
+  events with a `FormatException` instead of growing memory without bound;
+  `SseConnection` forwards parser errors to `events`.

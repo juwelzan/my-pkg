@@ -68,6 +68,24 @@ void main() {
     });
   });
 
+  test(
+    'oversized events are dropped with an error; parsing continues',
+    () async {
+      final p = SseParser(maxEventBytes: 100);
+      final events = <String>[];
+      final errors = <Object>[];
+      p.events.listen((e) => events.add(e.data), onError: errors.add);
+      p.add('data: ${'x' * 60}\n');
+      p.add('data: ${'y' * 60}\n\n'); // 121 chars > 100
+      p.add('data: ${'z' * 500}'); // unterminated line > 100
+      p.add('\n\ndata: ok\n\n');
+      await p.close();
+      expect(events, ['ok']);
+      expect(errors, hasLength(2));
+      expect(errors.first, isA<FormatException>());
+    },
+  );
+
   group('SseConnection via OmniMock', () {
     late OmniMock mock;
     late OmniNetwork api;

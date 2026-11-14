@@ -18,7 +18,7 @@ void main() {
     OmniRawResponse redirect(int code, String to) =>
         OmniRawResponse(statusCode: code, headers: {'location': to});
     OmniRawResponse ok() =>
-        OmniRawResponse(statusCode: 200, bodyBytes: utf8.encode('"ok"'));
+        OmniRawResponse(statusCode: 200, bodyBytes: utf8.encode('ok'));
 
     setUp(() {
       api = OmniNetwork(
@@ -109,7 +109,7 @@ void main() {
               ..statusCode = 302
               ..headers.set('location', '/final');
           } else {
-            req.response.write('"done"');
+            req.response.write('done');
           }
           await req.response.close();
         });
@@ -150,31 +150,40 @@ void main() {
     test(
       'memory store partitions by the exact token (no hash collisions)',
       () async {
+        // Find two different tokens with the same String.hashCode.
+        final seen = <int, String>{};
+        late String a, b;
+        for (var i = 0; ; i++) {
+          final t = 'Bearer t$i';
+          final prev = seen[t.hashCode];
+          if (prev != null) {
+            (a, b) = (prev, t);
+            break;
+          }
+          seen[t.hashCode] = t;
+        }
+        expect(a.hashCode, b.hashCode);
         final mock = OmniMock()
           ..get(
             '/me',
-            (r) => MockResponse.json(
-              r.headers['authorization'],
+            (r) => MockResponse.text(
+              '${r.headers['authorization']}',
               headers: {'cache-control': 'max-age=60'},
             ),
           );
-        final cache = OmniCache(cacheAuthenticated: true);
         final api = OmniNetwork(
           baseUrl: 'https://h.io',
           transport: mock,
-          cache: cache,
+          cache: OmniCache(cacheAuthenticated: true),
         );
         addTearDown(api.close);
-        // "Aa" and "BB" have the same String.hashCode in Dart.
-        expect('Bearer Aa'.hashCode == 'Bearer BB'.hashCode, isTrue);
+        expect(await api.get<String>('/me', headers: {'authorization': a}), a);
         expect(
-          await api.get<String>('/me', headers: {'authorization': 'Bearer Aa'}),
-          'Bearer Aa',
-        );
-        expect(
-          await api.get<String>('/me', headers: {'authorization': 'Bearer BB'}),
-          'Bearer BB',
-        );
+          await api.get<String>('/me', headers: {'authorization': b}),
+          b,
+        ); // not a's data
+        expect(await api.get<String>('/me', headers: {'authorization': a}), a);
+        expect(mock.calls, hasLength(2)); // the third came from a's own entry
       },
     );
   });
@@ -250,6 +259,22 @@ void main() {
   });
 
   group('no leaks', () {
+    test(
+      'child tokens: parent cancels them, cancelled children are pruned',
+      () {
+        final parent = OmniCancelToken();
+        final kids = [for (var i = 0; i < 100; i++) parent.child()];
+        for (final k in kids.take(60)) {
+          k.cancel();
+        }
+        parent.child(); // prunes cancelled children
+        expect(parent.debugChildren, 41);
+        parent.cancel();
+        expect(kids.every((k) => k.isCancelled), isTrue);
+        expect(parent.debugChildren, 0);
+      },
+    );
+
     test('pretty log buffer is bounded', () {
       final sink = PrettyLogSink(printer: (_) {});
       for (var i = 0; i < 1000; i++) {
@@ -306,6 +331,8 @@ void main() {
       expect(mock.calls, isNotEmpty);
       expect(sink.debugOpenRequests, 0);
       expect(token.attachedRequests, 0);
+      token.cancel();
+      expect(token.debugChildren, 0);
       await api.close();
     });
   });

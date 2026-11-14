@@ -470,6 +470,9 @@ message that names it.
 | Error messages | no bodies, headers, query strings or URL user info |
 | Link pagination | same origin only |
 | Code generation | never required |
+| Redirects | followed by OmniNetwork; credentials dropped on cross-origin hops; no HTTPS → HTTP |
+| Large JSON (≥ 256 KB) | parsed off the main isolate on IO platforms |
+| Tokens in storage, queue, logs, errors | never stored by the queue, always `***` in logs, never in messages |
 
 ## Platforms
 

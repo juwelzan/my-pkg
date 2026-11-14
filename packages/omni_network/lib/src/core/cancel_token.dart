@@ -30,16 +30,38 @@ final class OmniCancelToken {
       l();
     }
     _listeners.clear();
+    for (final w in _children) {
+      w.target?.cancel();
+    }
+    _children.clear();
   }
 
   /// A token that is cancelled when this one is (but can also be
   /// cancelled on its own), e.g. one per screen under an app-wide token.
+  ///
+  /// The parent holds children only weakly, so creating many children (one
+  /// per request or screen) on a long-lived token does not leak them.
   OmniCancelToken child() {
     final c = OmniCancelToken();
-    final detach = attach(c.cancel);
-    c.attach(detach);
+    if (_cancelled) {
+      c.cancel();
+      return c;
+    }
+    _children.removeWhere((w) {
+      final t = w.target;
+      return t == null || t._cancelled;
+    });
+    _children.add(WeakReference(c));
     return c;
   }
+
+  final List<WeakReference<OmniCancelToken>> _children = [];
+
+  /// Live child tokens still referenced (diagnostics/tests).
+  int get debugChildren => _children.where((w) {
+    final t = w.target;
+    return t != null && !t._cancelled;
+  }).length;
 
   /// Registers [onCancel]; returns a function that unregisters it. Internal.
   void Function() attach(void Function() onCancel) {
