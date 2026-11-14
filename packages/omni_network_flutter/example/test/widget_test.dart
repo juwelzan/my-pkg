@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omni_network/advanced.dart';
 import 'package:omni_network_flutter/omni_network_flutter.dart';
@@ -6,6 +7,7 @@ import 'package:omni_network_flutter_example/main.dart';
 
 void main() {
   testWidgets('posts load and show up in the inspector', (tester) async {
+    FlutterSecureStorage.setMockInitialValues({});
     final inspector = OmniInspector(enabled: true);
     addTearDown(inspector.dispose);
     final api = OmniNetwork(

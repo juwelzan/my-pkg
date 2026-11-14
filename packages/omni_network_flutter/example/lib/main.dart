@@ -26,7 +26,8 @@ void main() {
   final api = OmniNetwork(
     baseUrl: 'https://api.example.com',
     transport: fakeBackend(),
-    headers: {'Authorization': 'Bearer demo-token'},
+    // Tokens survive app restarts (Keychain / Keystore / …).
+    auth: OmniAuth(storage: SecureTokenStorage()),
     enableLogging: inspector.enabled,
     logSink: inspector.sink('api'),
   );
@@ -83,9 +84,16 @@ class _PostsPageState extends State<PostsPage> {
         IconButton(
           tooltip: 'Log in',
           icon: const Icon(Icons.login),
-          onPressed: () => widget.api
-              .post<void>('/login', body: {'user': 'ana', 'password': 'pw'})
-              .asResult(),
+          onPressed: () async {
+            final r = await widget.api.post<Map<String, dynamic>>(
+              '/login',
+              body: {'user': 'ana', 'password': 'pw'},
+              auth: false,
+            );
+            await widget.api.auth.login(
+              Tokens(access: r['access_token'] as String),
+            );
+          },
         ),
         IconButton(
           tooltip: 'Refresh',

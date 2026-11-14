@@ -400,7 +400,8 @@ void main() {
       final b = parent.child();
       a.cancel();
       expect(parent.isCancelled, isFalse);
-      expect(parent.attachedRequests, 1); // a detached itself
+      parent.child().cancel(); // prunes cancelled children
+      expect(parent.debugChildren, 1); // only b is still live
       parent.cancel();
       expect(b.isCancelled, isTrue);
       expect(parent.child().isCancelled, isTrue);
