@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:meta/meta.dart';
 
+import '../core/http_date.dart';
 import '../core/omni_network_exception.dart';
 import '../core/omni_request.dart';
 import '../core/omni_response.dart';
@@ -123,14 +124,6 @@ final class RetryPolicy {
     return backoff(retry);
   }
 
-  static final _date = RegExp(
-    r'^\w{3}, (\d{2}) (\w{3}) (\d{4}) (\d{2}):(\d{2}):(\d{2}) GMT$',
-  );
-  static const _months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', //
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-  ];
-
   /// Parses a `Retry-After` value: delta seconds or an IMF-fixdate
   /// (`Wed, 21 Oct 2015 07:28:00 GMT`). Past dates give [Duration.zero];
   /// unparsable values give `null`.
@@ -139,18 +132,8 @@ final class RetryPolicy {
     final v = value.trim();
     final secs = int.tryParse(v);
     if (secs != null) return secs < 0 ? null : Duration(seconds: secs);
-    final m = _date.firstMatch(v);
-    if (m == null) return null;
-    final month = _months.indexOf(m[2]!) + 1;
-    if (month == 0) return null;
-    final at = DateTime.utc(
-      int.parse(m[3]!),
-      month,
-      int.parse(m[1]!),
-      int.parse(m[4]!),
-      int.parse(m[5]!),
-      int.parse(m[6]!),
-    );
+    final at = parseHttpDate(v);
+    if (at == null) return null;
     final d = at.difference(now.toUtc());
     return d.isNegative ? Duration.zero : d;
   }

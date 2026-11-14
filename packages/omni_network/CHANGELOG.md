@@ -67,3 +67,19 @@
   (`nextCursorKey` JSON path), `LinkHeaderPagination` (RFC 8288; refuses
   next links to another origin so auth headers never leave the API host).
   `itemsKey` JSON path (`data`, `result.items`) keeps metadata visible.
+- Step 8: `OmniCache` for GET (`OmniNetwork(cache:)`, per request
+  `OmniRequest(cachePolicy:)`): `standard` (RFC 9111 freshness from
+  `max-age`/`Age`/`Expires`+`Date`, `no-store`, `no-cache`, `Vary`,
+  conditional `If-None-Match`/`If-Modified-Since`, `304` → cached body),
+  `cacheFirst`, `staleWhileRevalidate` (background refresh, errors
+  swallowed), `networkFirst` (offline fallback on connection errors and
+  timeouts only), `refresh`, `noCache`. Request `Cache-Control` honoured.
+  Successful unsafe requests invalidate the URL. Authenticated responses are
+  never cached unless `cacheAuthenticated: true`, then partitioned by
+  `authScope` (or token hash in memory). `CacheStore` interface +
+  `MemoryCacheStore` (LRU, entry and byte limits).
+- `OmniRawResponse.source` (`network`/`cache`/`revalidated`), shown in logs.
+- In-flight deduplication (`deduplicate: true` by default): identical
+  concurrent GETs (same URL and headers) share one network call; each caller
+  keeps its own timeout/cancel, and the shared call is cancelled only when
+  every caller has left.

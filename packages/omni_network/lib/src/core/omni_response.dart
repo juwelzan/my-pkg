@@ -3,6 +3,8 @@ import 'dart:typed_data';
 
 import 'package:meta/meta.dart';
 
+import '../cache/omni_cache.dart' show ResponseSource;
+
 /// An undecoded HTTP response. Any status code is returned as-is (typed
 /// decoding and status-based errors arrive in a later step).
 @immutable
@@ -14,6 +16,7 @@ final class OmniRawResponse {
     Uint8List? bodyBytes,
     this.duration = Duration.zero,
     this.requestUri,
+    this.source = ResponseSource.network,
   }) : headers = Map.unmodifiable({
          for (final e in headers.entries) e.key.toLowerCase(): e.value,
        }),
@@ -35,6 +38,9 @@ final class OmniRawResponse {
   /// and fragment removed (safe to log). Set by `OmniNetwork`.
   final Uri? requestUri;
 
+  /// Network, cache, or a `304` revalidation of a cached entry.
+  final ResponseSource source;
+
   /// Whether [statusCode] is 2xx.
   bool get isSuccess => statusCode >= 200 && statusCode < 300;
 
@@ -53,6 +59,7 @@ final class OmniRawResponse {
         bodyBytes: bodyBytes,
         duration: duration,
         requestUri: requestUri ?? this.requestUri,
+        source: source,
       );
 
   @override

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import '../auth/bearer_auth.dart';
+import '../cache/omni_cache.dart';
 import '../log/network_log.dart';
 import '../log/network_logger.dart';
 import '../log/redactor.dart';
@@ -53,6 +54,9 @@ final class OmniNetwork {
   /// * [retry]: default [RetryPolicy] (none when `null`); overridable per
   ///   request via `OmniRequest(retry:)`.
   /// * [circuitBreaker]: fail fast for hosts that keep failing.
+  /// * [cache]: response cache for GET requests, see [OmniCache].
+  /// * [deduplicate]: identical concurrent GETs (same URL and headers) share
+  ///   one network call; each caller keeps its own timeout and cancel.
   OmniNetwork({
     String? baseUrl,
     Map<String, String> headers = const {},
@@ -67,6 +71,8 @@ final class OmniNetwork {
     this.auth,
     this.retry,
     this.circuitBreaker,
+    this.cache,
+    this.deduplicate = true,
   }) : interceptors = List.unmodifiable(interceptors),
        _logger = enableLogging
            ? NetworkLogger(
@@ -102,6 +108,14 @@ final class OmniNetwork {
   final CircuitBreaker? circuitBreaker;
 
   int _cancelEpoch = 0;
+
+  /// Response cache, or `null`.
+  final OmniCache? cache;
+
+  /// Whether identical concurrent GETs share one network call.
+  final bool deduplicate;
+
+  final Map<String, _Shared> _inflight = {};
 
   /// Whether requests are logged. See the constructor.
   final bool enableLogging;
@@ -641,20 +655,68 @@ final class OmniNetwork {
   Future<OmniRawResponse> _sendOnce(OmniRequest request, _Transfer? t) async {
     if (_closed) throw const ClosedFailure();
     final log = _logger;
-    if (log == null) return _transmit(resolve(request), request, t);
+    if (log == null) return _network(resolve(request), request, t);
     final id = ++_logSeq;
     final watch = Stopwatch()..start();
     TransportRequest? resolved;
     try {
       resolved = resolve(request);
       log.request(id, resolved);
-      final response = await _transmit(resolved, request, t);
+      final response = await _network(resolved, request, t);
       log.response(id, resolved, response);
       return response;
     } on OmniNetworkException catch (e) {
       log.error(id, resolved, request.method.verb, e, watch.elapsed);
       rethrow;
     }
+  }
+
+  Future<OmniRawResponse> _network(
+    TransportRequest resolved,
+    OmniRequest request,
+    _Transfer? t,
+  ) async {
+    final cache = this.cache;
+    if (cache == null || t != null) return _transmit(resolved, request, t);
+    final res = await cache.handle(
+      resolved,
+      request.cachePolicy,
+      (r) => _transmit(r, request, null),
+    );
+    return res.requestUri != null
+        ? res
+        : res.finish(duration: res.duration, requestUri: safeUri(resolved.uri));
+  }
+
+  Future<OmniRawResponse> _shared(TransportRequest r, CancelSignal caller) {
+    final key = [
+      r.uri.toString(),
+      for (final e
+          in (r.headers.entries.toList()
+            ..sort((a, b) => a.key.compareTo(b.key))))
+        '${e.key}:${e.value}',
+    ].join('\n');
+    var shared = _inflight[key];
+    if (shared == null) {
+      final signal = CancelSignal();
+      final s = shared = _Shared(
+        signal,
+        Future.sync(() => _transport.send(r, signal)),
+      );
+      _inflight[key] = s;
+      s.future.whenComplete(() {
+        if (identical(_inflight[key], s)) _inflight.remove(key);
+      }).ignore();
+    }
+    final s = shared;
+    s.waiters++;
+    caller.whenCancelled.then((_) {
+      if (--s.waiters == 0) {
+        s.signal.cancel();
+        if (identical(_inflight[key], s)) _inflight.remove(key);
+      }
+    });
+    return s.future;
   }
 
   Future<OmniRawResponse> _transmit(
@@ -701,7 +763,12 @@ final class OmniNetwork {
       final response = await Future.any<OmniRawResponse>([
         Future.sync(
           () => target == null
-              ? _transport.send(outgoing, signal)
+              ? (deduplicate &&
+                        outgoing.method == HttpMethod.get &&
+                        outgoing.body == null &&
+                        outgoing.bodyStream == null
+                    ? _shared(outgoing, signal)
+                    : _transport.send(outgoing, signal))
               : _download(outgoing, signal, t!, target, kick, uri),
         ),
         signal.whenCancelled.then<OmniRawResponse>(
@@ -848,6 +915,10 @@ final class OmniNetwork {
     for (final s in _pending.toList()) {
       s.cancel(_Reason.closed);
     }
+    for (final s in _inflight.values.toList()) {
+      s.signal.cancel();
+    }
+    _inflight.clear();
     if (_ownsTransport) await _transport.close(force: true);
   }
 
@@ -962,6 +1033,13 @@ final class OmniNetwork {
   static Map<String, String> _lower(Map<String, String> h) => {
     for (final e in h.entries) e.key.toLowerCase(): e.value,
   };
+}
+
+final class _Shared {
+  _Shared(this.signal, this.future);
+  final CancelSignal signal;
+  final Future<OmniRawResponse> future;
+  int waiters = 0;
 }
 
 enum _Reason { timeout, idle, closed, user }

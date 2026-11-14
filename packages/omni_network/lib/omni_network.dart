@@ -4,6 +4,8 @@
 library;
 
 export 'src/auth/bearer_auth.dart' show BearerAuth;
+export 'src/cache/cache_store.dart';
+export 'src/cache/omni_cache.dart';
 export 'src/core/cancel_signal.dart' show CancelSignal;
 export 'src/core/cancel_token.dart';
 export 'src/core/decoding.dart' show JsonDecoder;

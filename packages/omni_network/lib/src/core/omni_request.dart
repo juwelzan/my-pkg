@@ -1,5 +1,6 @@
 import 'package:meta/meta.dart';
 
+import '../cache/omni_cache.dart' show CachePolicy;
 import '../resilience/retry_policy.dart';
 import 'cancel_token.dart';
 
@@ -47,6 +48,7 @@ final class OmniRequest {
     this.skipAuth = false,
     this.cancelToken,
     this.retry,
+    this.cachePolicy,
   });
 
   /// GET request.
@@ -58,6 +60,7 @@ final class OmniRequest {
     bool skipAuth = false,
     OmniCancelToken? cancelToken,
     RetryPolicy? retry,
+    CachePolicy? cachePolicy,
   }) : this(
          HttpMethod.get,
          path,
@@ -67,6 +70,7 @@ final class OmniRequest {
          skipAuth: skipAuth,
          cancelToken: cancelToken,
          retry: retry,
+         cachePolicy: cachePolicy,
        );
 
   /// POST request.
@@ -79,6 +83,7 @@ final class OmniRequest {
     bool skipAuth = false,
     OmniCancelToken? cancelToken,
     RetryPolicy? retry,
+    CachePolicy? cachePolicy,
   }) : this(
          HttpMethod.post,
          path,
@@ -89,6 +94,7 @@ final class OmniRequest {
          skipAuth: skipAuth,
          cancelToken: cancelToken,
          retry: retry,
+         cachePolicy: cachePolicy,
        );
 
   /// PUT request.
@@ -101,6 +107,7 @@ final class OmniRequest {
     bool skipAuth = false,
     OmniCancelToken? cancelToken,
     RetryPolicy? retry,
+    CachePolicy? cachePolicy,
   }) : this(
          HttpMethod.put,
          path,
@@ -111,6 +118,7 @@ final class OmniRequest {
          skipAuth: skipAuth,
          cancelToken: cancelToken,
          retry: retry,
+         cachePolicy: cachePolicy,
        );
 
   /// PATCH request.
@@ -123,6 +131,7 @@ final class OmniRequest {
     bool skipAuth = false,
     OmniCancelToken? cancelToken,
     RetryPolicy? retry,
+    CachePolicy? cachePolicy,
   }) : this(
          HttpMethod.patch,
          path,
@@ -133,6 +142,7 @@ final class OmniRequest {
          skipAuth: skipAuth,
          cancelToken: cancelToken,
          retry: retry,
+         cachePolicy: cachePolicy,
        );
 
   /// DELETE request.
@@ -145,6 +155,7 @@ final class OmniRequest {
     bool skipAuth = false,
     OmniCancelToken? cancelToken,
     RetryPolicy? retry,
+    CachePolicy? cachePolicy,
   }) : this(
          HttpMethod.delete,
          path,
@@ -155,6 +166,7 @@ final class OmniRequest {
          skipAuth: skipAuth,
          cancelToken: cancelToken,
          retry: retry,
+         cachePolicy: cachePolicy,
        );
 
   /// HEAD request.
@@ -166,6 +178,7 @@ final class OmniRequest {
     bool skipAuth = false,
     OmniCancelToken? cancelToken,
     RetryPolicy? retry,
+    CachePolicy? cachePolicy,
   }) : this(
          HttpMethod.head,
          path,
@@ -175,6 +188,7 @@ final class OmniRequest {
          skipAuth: skipAuth,
          cancelToken: cancelToken,
          retry: retry,
+         cachePolicy: cachePolicy,
        );
 
   /// HTTP method.
@@ -208,6 +222,9 @@ final class OmniRequest {
   /// [RetryPolicy.none] to disable retries for one call.
   final RetryPolicy? retry;
 
+  /// Cache policy for this GET; overrides the client cache's default.
+  final CachePolicy? cachePolicy;
+
   /// Copy with the given fields replaced.
   OmniRequest copyWith({
     HttpMethod? method,
@@ -219,6 +236,7 @@ final class OmniRequest {
     bool? skipAuth,
     OmniCancelToken? cancelToken,
     RetryPolicy? retry,
+    CachePolicy? cachePolicy,
   }) => OmniRequest(
     method ?? this.method,
     path ?? this.path,
@@ -229,6 +247,7 @@ final class OmniRequest {
     skipAuth: skipAuth ?? this.skipAuth,
     cancelToken: cancelToken ?? this.cancelToken,
     retry: retry ?? this.retry,
+    cachePolicy: cachePolicy ?? this.cachePolicy,
   );
 
   /// Copy with header [name] set to [value] (replacing any existing header

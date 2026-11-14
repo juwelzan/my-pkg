@@ -1,3 +1,4 @@
+import '../cache/omni_cache.dart' show ResponseSource;
 import '../core/omni_network_exception.dart';
 import '../core/omni_response.dart';
 import '../transport/transport.dart';
@@ -67,7 +68,8 @@ final class NetworkLogger {
         duration: res.duration,
         message: [
           '$_tag #$id] <-- ${res.statusCode} ${r.method.verb} $url '
-              '($ms ms, ${res.bodyBytes.length} B)',
+              '($ms ms, ${res.bodyBytes.length} B'
+              '${res.source == ResponseSource.network ? '' : ', ${res.source.name}'})',
           if (headers.isNotEmpty) '  headers: $headers',
           if (body != null) '  body: $body',
         ].join('\n'),

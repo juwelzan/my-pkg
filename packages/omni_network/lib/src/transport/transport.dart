@@ -39,6 +39,16 @@ final class TransportRequest {
   /// Byte length of [bodyStream], when known.
   final int? contentLength;
 
+  /// Copy with [extra] headers added (lower-case names).
+  TransportRequest withHeaders(Map<String, String> extra) => TransportRequest(
+    method: method,
+    uri: uri,
+    headers: {...headers, ...extra},
+    body: body,
+    bodyStream: bodyStream,
+    contentLength: contentLength,
+  );
+
   /// Copy with [bodyStream] replaced (headers, URL and method kept).
   TransportRequest withBodyStream(Stream<List<int>> Function() open) =>
       TransportRequest(
