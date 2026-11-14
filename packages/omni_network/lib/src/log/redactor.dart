@@ -25,6 +25,9 @@ final class Redactor {
   /// Replacement for masked values.
   static const mask = '***';
 
+  /// Bodies larger than this are summarised by size instead of shown.
+  static const maxRedactedBytes = 64 * 1024;
+
   static const _headers = {
     'authorization',
     'proxy-authorization',
@@ -140,6 +143,12 @@ final class Redactor {
   String? body(List<int>? bytes, String? contentType, {int maxChars = 2000}) {
     if (bytes == null || bytes.isEmpty) return null;
     final type = (contentType ?? '').toLowerCase();
+    // Redacting means parsing; never do that for huge bodies (slow, and a
+    // large blob is no use in a log anyway).
+    if (bytes.length > maxRedactedBytes) {
+      final label = type.isEmpty ? 'unknown type' : type;
+      return '<${bytes.length} bytes, $label, too large to show>';
+    }
     String text;
     if (type.contains('json')) {
       final raw = utf8.decode(bytes, allowMalformed: true);

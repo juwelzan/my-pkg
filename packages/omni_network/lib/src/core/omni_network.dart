@@ -94,6 +94,8 @@ final class OmniNetwork {
     this.circuitBreaker,
     this.cache,
     this.deduplicate = true,
+    this.followRedirects = true,
+    this.maxRedirects = 5,
   }) : assert(
          auth == null || token == null,
          'Pass either token: or auth:, not both',
@@ -158,6 +160,77 @@ final class OmniNetwork {
   /// Whether identical concurrent GETs share one network call.
   final bool deduplicate;
 
+  /// Follow 301/302/303/307/308 redirects (safely, see [maxRedirects]).
+  ///
+  /// Redirects are followed by OmniNetwork itself, not the HTTP library, so
+  /// that credentials (`Authorization`, `Cookie`, `Proxy-Authorization`) are
+  /// **removed** when a redirect leaves the original origin, and an HTTPS →
+  /// HTTP downgrade is never followed (the 3xx response is returned).
+  /// 303, and 301/302 after a POST, continue as GET without a body.
+  final bool followRedirects;
+
+  /// Maximum redirects per request; the last 3xx is returned after that.
+  final int maxRedirects;
+
+  static const _redirects = {301, 302, 303, 307, 308};
+  static const _credentialHeaders = {
+    'authorization',
+    'cookie',
+    'proxy-authorization',
+  };
+
+  Future<OmniRawResponse> _redirecting(
+    TransportRequest resolved,
+    OmniRequest request,
+    _Transfer? t,
+  ) async {
+    var current = resolved;
+    final origin = resolved.uri;
+    for (var hop = 0; ; hop++) {
+      final res = await _transmit(current, request, t);
+      final location = res.headers['location'];
+      if (!followRedirects ||
+          !_redirects.contains(res.statusCode) ||
+          location == null ||
+          hop >= maxRedirects) {
+        return res;
+      }
+      final Uri next;
+      try {
+        next = current.uri.resolve(location);
+      } on FormatException {
+        return res;
+      }
+      if (next.scheme != 'http' && next.scheme != 'https') return res;
+      if (current.uri.scheme == 'https' && next.scheme == 'http') return res;
+      final sameOrigin =
+          next.scheme == origin.scheme &&
+          next.host == origin.host &&
+          next.port == origin.port;
+      final toGet =
+          res.statusCode == 303 ||
+          ((res.statusCode == 301 || res.statusCode == 302) &&
+              current.method == HttpMethod.post);
+      final headers = {
+        for (final e in current.headers.entries)
+          if (sameOrigin || !_credentialHeaders.contains(e.key))
+            if (!toGet ||
+                (e.key != 'content-type' && e.key != 'content-length'))
+              e.key: e.value,
+      };
+      current = TransportRequest(
+        method: toGet && current.method != HttpMethod.head
+            ? HttpMethod.get
+            : current.method,
+        uri: next,
+        headers: headers,
+        body: toGet ? null : current.body,
+        bodyStream: toGet ? null : current.bodyStream,
+        contentLength: toGet ? null : current.contentLength,
+      );
+    }
+  }
+
   final Map<String, _Shared> _inflight = {};
 
   /// Redaction rules for logs and [toCurl].
@@ -209,7 +282,7 @@ final class OmniNetwork {
   }) async {
     final raw = await _ok(request);
     return OmniResponse(
-      decodeBody<T>(raw, decoder, adapter ?? responseAdapter),
+      await decodeBodyAsync<T>(raw, decoder, adapter ?? responseAdapter),
       raw,
     );
   }
@@ -222,7 +295,7 @@ final class OmniNetwork {
   }) async {
     final raw = await _ok(request);
     return OmniResponse(
-      decodeList<T>(raw, decoder, adapter ?? responseAdapter),
+      await decodeListAsync<T>(raw, decoder, adapter ?? responseAdapter),
       raw,
     );
   }
@@ -743,7 +816,7 @@ final class OmniNetwork {
       _Transfer(onSend: onProgress, overall: timeout, idle: idleTimeout),
     );
     if (!raw.isSuccess) throw HttpFailure(raw);
-    return decodeBody<T>(raw, decoder, adapter ?? responseAdapter);
+    return decodeBodyAsync<T>(raw, decoder, adapter ?? responseAdapter);
   }
 
   /// Downloads [path] into memory. See [upload] for timeouts/cancel.
@@ -1075,11 +1148,11 @@ final class OmniNetwork {
     _Transfer? t,
   ) async {
     final cache = this.cache;
-    if (cache == null || t != null) return _transmit(resolved, request, t);
+    if (cache == null || t != null) return _redirecting(resolved, request, t);
     final res = await cache.handle(
       resolved,
       request.cachePolicy,
-      (r) => _transmit(r, request, null),
+      (r) => _redirecting(r, request, null),
     );
     return res.requestUri != null
         ? res

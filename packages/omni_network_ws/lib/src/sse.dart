@@ -34,10 +34,16 @@ final class SseEvent {
 /// values are reported through [onRetry]; the last id is kept in [lastId].
 final class SseParser {
   /// Creates a parser.
-  SseParser({this.onRetry});
+  SseParser({this.onRetry, this.maxEventBytes = 1024 * 1024});
 
   /// Called with a valid `retry:` value.
   final void Function(Duration retry)? onRetry;
+
+  /// Upper bound for one event's data (and one unterminated line). A server
+  /// that exceeds it gets a `FormatException` on [events] instead of
+  /// unbounded memory use; the oversized event is dropped.
+  final int maxEventBytes;
+  var _oversized = false;
 
   final _out = StreamController<SseEvent>(sync: true);
   final _data = StringBuffer();
@@ -78,6 +84,23 @@ final class SseParser {
       }
     }
     _pending += text.substring(start);
+    if (_pending.length > maxEventBytes) {
+      _pending = '';
+      _overflow();
+    }
+  }
+
+  void _overflow() {
+    _data.clear();
+    _hasData = false;
+    if (!_oversized) {
+      _oversized = true;
+      _out.addError(
+        FormatException(
+          'SSE event larger than $maxEventBytes characters; dropped',
+        ),
+      );
+    }
   }
 
   void _line(String line) {
@@ -94,9 +117,11 @@ final class SseParser {
       case 'event':
         _event = value;
       case 'data':
+        if (_oversized) return;
         if (_hasData) _data.write('\n');
         _data.write(value);
         _hasData = true;
+        if (_data.length > maxEventBytes) _overflow();
       case 'id':
         if (!value.contains('\u0000')) lastId = value;
       case 'retry':
@@ -107,6 +132,11 @@ final class SseParser {
   }
 
   void _dispatch() {
+    if (_oversized) {
+      _oversized = false;
+      _event = '';
+      return;
+    }
     if (!_hasData) {
       _event = '';
       return;
@@ -254,7 +284,7 @@ final class SseConnection {
         final sub = parser.events.listen((e) {
           lastEventId = parser.lastId;
           if (!_events.isClosed) _events.add(e);
-        });
+        }, onError: _addError);
         try {
           await for (final text in utf8.decoder.bind(res.body)) {
             parser.add(text);

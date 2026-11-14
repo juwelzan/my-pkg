@@ -93,7 +93,9 @@ final class DioTransport implements Transport {
           headers: headers,
           responseType: type,
           validateStatus: (_) => true,
-          followRedirects: true,
+          // OmniNetwork follows redirects itself (credential-safe).
+          followRedirects: false,
+          maxRedirects: 0,
           // Dio would otherwise pick a content type; ours is in headers.
           contentType: request.headers['content-type'],
         ),

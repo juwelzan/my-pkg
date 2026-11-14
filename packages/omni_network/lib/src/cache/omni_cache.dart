@@ -54,7 +54,7 @@ enum ResponseSource {
 /// **Authenticated responses** (request had an `Authorization` header) are
 /// not cached unless [cacheAuthenticated] is `true`. Then entries are
 /// partitioned by [authScope] (e.g. the user id) — or, if that is `null`, by
-/// an in-memory hash of the header, which suits [MemoryCacheStore] only.
+/// the exact token, which is allowed with [MemoryCacheStore] only.
 /// Call [clear] on logout.
 ///
 /// A successful POST/PUT/PATCH/DELETE invalidates cached entries of the
@@ -69,7 +69,18 @@ final class OmniCache {
     this.maxEntryBytes = 2 * 1024 * 1024,
     DateTime Function()? now,
   }) : store = store ?? MemoryCacheStore(),
-       _now = now ?? DateTime.now;
+       _now = now ?? DateTime.now {
+    if (cacheAuthenticated &&
+        authScope == null &&
+        this.store is! MemoryCacheStore) {
+      // Without a scope, entries would be keyed by the token itself; that
+      // must never be written to persistent storage.
+      throw ArgumentError(
+        'cacheAuthenticated with a persistent CacheStore needs authScope '
+        '(e.g. the user id)',
+      );
+    }
+  }
 
   /// Where entries live.
   final CacheStore store;
@@ -114,7 +125,9 @@ final class OmniCache {
     if (!cacheAuthenticated) return null;
     final scope = authScope?.call();
     if (scope != null) return 'u:$scope';
-    return 'h:${r.headers['authorization'].hashCode}';
+    // In-memory only (enforced in the constructor): the exact header value,
+    // so two users can never share an entry through a hash collision.
+    return 't:${r.headers['authorization']}';
   }
 
   static String _url(TransportRequest r) => r.uri.toString();

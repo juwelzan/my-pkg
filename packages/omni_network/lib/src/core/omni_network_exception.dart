@@ -1,3 +1,4 @@
+import 'http_status.dart';
 import 'omni_response.dart';
 
 /// Base class of every error thrown by OmniNetwork.
@@ -73,7 +74,13 @@ final class RequestFailure extends OmniNetworkException {
 final class HttpFailure extends OmniNetworkException {
   /// Creates an HTTP status failure for [response].
   HttpFailure(this.response)
-    : super('HTTP ${response.statusCode}', uri: response.requestUri);
+    : super(
+        [
+          'HTTP ${response.statusCode}',
+          ?httpReasonPhrase(response.statusCode),
+        ].join(' '),
+        uri: response.requestUri,
+      );
 
   /// The full response, e.g. to read an error body via `response.json`.
   /// Not included in [toString], so it is never logged by accident.

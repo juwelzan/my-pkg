@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:meta/meta.dart';
 
 import '../cache/omni_cache.dart' show ResponseSource;
+import '../core/http_status.dart';
 import 'ansi_stub.dart' if (dart.library.io) 'ansi_io.dart';
 import 'network_log.dart';
 
@@ -57,47 +58,29 @@ final class PrettyLogSink implements LogSink {
 
   final void Function(String) _printer;
   final bool _colors;
+  // Insertion-ordered; bounded so a request whose result is never logged
+  // (e.g. a programming error thrown mid-call) cannot grow it forever.
   final Map<int, NetworkLogRecord> _open = {};
+  static const _maxOpen = 256;
+
+  /// Requests waiting for their result (diagnostics/tests).
+  @visibleForTesting
+  int get debugOpenRequests => _open.length;
 
   @override
   void log(NetworkLogRecord record) {
     switch (record.kind) {
       case NetworkLogKind.request:
         _open[record.requestId] = record;
+        while (_open.length > _maxOpen) {
+          _open.remove(_open.keys.first);
+        }
       case NetworkLogKind.response || NetworkLogKind.error:
         final req = _open.remove(record.requestId);
         // Trailing newline: a blank line between blocks.
         _printer('${format(req, record)}\n');
     }
   }
-
-  static const _reason = {
-    200: 'OK',
-    201: 'Created',
-    202: 'Accepted',
-    204: 'No Content',
-    206: 'Partial Content',
-    301: 'Moved Permanently',
-    302: 'Found',
-    304: 'Not Modified',
-    400: 'Bad Request',
-    401: 'Unauthorized',
-    403: 'Forbidden',
-    404: 'Not Found',
-    405: 'Method Not Allowed',
-    408: 'Request Timeout',
-    409: 'Conflict',
-    410: 'Gone',
-    413: 'Payload Too Large',
-    415: 'Unsupported Media Type',
-    422: 'Unprocessable Entity',
-    429: 'Too Many Requests',
-    500: 'Internal Server Error',
-    501: 'Not Implemented',
-    502: 'Bad Gateway',
-    503: 'Service Unavailable',
-    504: 'Gateway Timeout',
-  };
 
   static String _size(int bytes) => bytes < 1024
       ? '$bytes B'
@@ -171,7 +154,7 @@ final class PrettyLogSink implements LogSink {
     if (ok) {
       line(
         [
-          '${status < 400 ? '✔' : '✖'} $status${_reason[status] == null ? '' : ' ${_reason[status]}'}',
+          '${status < 400 ? '✔' : '✖'} $status${httpReasonPhrase(status) == null ? '' : ' ${httpReasonPhrase(status)}'}',
           ms,
           if (result.bytes case final n? when n > 0) _size(n),
           if (result.source case final s? when s != ResponseSource.network)

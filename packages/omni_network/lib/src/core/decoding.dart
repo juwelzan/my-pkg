@@ -1,3 +1,6 @@
+import 'dart:convert';
+
+import 'offthread_stub.dart' if (dart.library.io) 'offthread_io.dart';
 import 'omni_network_exception.dart';
 import 'omni_response.dart';
 import 'response_adapter.dart';
@@ -11,8 +14,9 @@ bool _same<A, B>() => <A>[] is List<B> && <B>[] is List<A>;
 T decodeBody<T>(
   OmniRawResponse raw,
   JsonDecoder<T>? decoder,
-  ResponseAdapter adapter,
-) {
+  ResponseAdapter adapter, {
+  ParsedJson? parsed,
+}) {
   final uri = raw.requestUri;
   if (decoder == null) {
     if (raw.bodyBytes.isEmpty) {
@@ -24,13 +28,13 @@ T decodeBody<T>(
     // parsed JSON, or the text when the body is not JSON (e.g. "OK").
     if (_same<T, Object?>()) {
       try {
-        return adapter.unwrap(raw.json, raw) as T;
+        return adapter.unwrap(parsed?.value ?? raw.json, raw) as T;
       } on FormatException {
         return raw.text as T;
       }
     }
   }
-  final value = adapter.unwrap(parseJson(raw), raw);
+  final value = adapter.unwrap(parsed?.value ?? parseJson(raw), raw);
   if (decoder == null) {
     if (value is T) return value;
     throw DecodeFailure('Expected $T, got ${value.runtimeType}', uri: uri);
@@ -42,10 +46,11 @@ T decodeBody<T>(
 List<T> decodeList<T>(
   OmniRawResponse raw,
   JsonDecoder<T> decoder,
-  ResponseAdapter adapter,
-) {
+  ResponseAdapter adapter, {
+  ParsedJson? parsed,
+}) {
   final uri = raw.requestUri;
-  final value = adapter.unwrap(parseJson(raw), raw);
+  final value = adapter.unwrap(parsed?.value ?? parseJson(raw), raw);
   if (value is! List) {
     throw DecodeFailure(
       'Expected a JSON array, got ${value.runtimeType}',
@@ -100,3 +105,50 @@ T runDecoder<T>(T Function() run, Uri? uri) {
     );
   }
 }
+
+/// Bodies at least this large are parsed off the main isolate (IO
+/// platforms), so big responses don't freeze the UI.
+const int offThreadJsonBytes = 256 * 1024;
+
+/// A JSON value parsed ahead of time. Internal.
+final class ParsedJson {
+  /// Wraps [value].
+  const ParsedJson(this.value);
+
+  /// The parsed value.
+  final Object? value;
+}
+
+Future<ParsedJson?> _preParse(OmniRawResponse raw) async {
+  if (raw.bodyBytes.length < offThreadJsonBytes) return null;
+  final bytes = raw.bodyBytes;
+  try {
+    return ParsedJson(
+      await runOffThread(
+        () => jsonDecode(utf8.decode(bytes, allowMalformed: true)),
+      ),
+    );
+  } on FormatException {
+    // Not JSON: let the synchronous path decide (text for top types,
+    // DecodeFailure otherwise).
+    return null;
+  }
+}
+
+/// [decodeBody], parsing large JSON bodies off the main isolate. Internal.
+Future<T> decodeBodyAsync<T>(
+  OmniRawResponse raw,
+  JsonDecoder<T>? decoder,
+  ResponseAdapter adapter,
+) async {
+  final textLike = raw.bodyBytes.isEmpty || <T>[] is List<String>;
+  final parsed = textLike ? null : await _preParse(raw);
+  return decodeBody<T>(raw, decoder, adapter, parsed: parsed);
+}
+
+/// [decodeList], parsing large JSON bodies off the main isolate. Internal.
+Future<List<T>> decodeListAsync<T>(
+  OmniRawResponse raw,
+  JsonDecoder<T> decoder,
+  ResponseAdapter adapter,
+) async => decodeList<T>(raw, decoder, adapter, parsed: await _preParse(raw));
