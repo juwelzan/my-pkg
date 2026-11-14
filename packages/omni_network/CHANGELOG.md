@@ -83,3 +83,10 @@
   concurrent GETs (same URL and headers) share one network call; each caller
   keeps its own timeout/cancel, and the shared call is cancelled only when
   every caller has left.
+- Step 9: `RequestState<T>` (sealed: `RequestIdle`, `RequestLoading`
+  with `previous`, `RequestSuccess`, `RequestEmpty`, `RequestError` with
+  `previous`/`networkError`) and `RequestController<T>` (`state`, `stream`
+  replaying the current state to each listener, `load` sharing a running
+  load, `refresh` restarting it, superseded loads never emit, `close`
+  cancels the request). `api.watch<T>()` / `api.watchList<T>()`.
+  Plain Dart; Flutter/Bloc bindings come in their own packages.

@@ -10,6 +10,7 @@ import '../log/redactor.dart';
 import '../paging/omni_pager.dart';
 import '../paging/pagination_strategy.dart';
 import '../resilience/circuit_breaker.dart';
+import '../state/request_controller.dart';
 import '../resilience/retry_policy.dart';
 import '../transfer/download_target.dart';
 import '../transfer/file_target_stub.dart'
@@ -347,6 +348,53 @@ final class OmniNetwork {
     decoder: decoder,
     adapter: adapter,
   )).data;
+
+  /// A [RequestController] that GETs [path] decoded into `T` (see [send]).
+  /// Starts loading at once unless [autoLoad] is `false`.
+  RequestController<T> watch<T>(
+    String path, {
+    JsonDecoder<T>? decoder,
+    Map<String, Object?> query = const {},
+    Map<String, String> headers = const {},
+    CachePolicy? cachePolicy,
+    bool Function(T value)? isEmpty,
+    bool autoLoad = true,
+  }) => RequestController<T>(
+    (token) async => (await send<T>(
+      OmniRequest.get(
+        path,
+        query: query,
+        headers: headers,
+        cancelToken: token,
+        cachePolicy: cachePolicy,
+      ),
+      decoder: decoder,
+    )).data,
+    isEmpty: isEmpty,
+    autoLoad: autoLoad,
+  );
+
+  /// Like [watch] for a JSON array; an empty array is [RequestEmpty].
+  RequestController<List<T>> watchList<T>(
+    String path, {
+    required JsonDecoder<T> decoder,
+    Map<String, Object?> query = const {},
+    Map<String, String> headers = const {},
+    CachePolicy? cachePolicy,
+    bool autoLoad = true,
+  }) => RequestController<List<T>>(
+    (token) async => (await sendList<T>(
+      OmniRequest.get(
+        path,
+        query: query,
+        headers: headers,
+        cancelToken: token,
+        cachePolicy: cachePolicy,
+      ),
+      decoder: decoder,
+    )).data,
+    autoLoad: autoLoad,
+  );
 
   /// A pager over the list at [path]; see [OmniPager].
   ///

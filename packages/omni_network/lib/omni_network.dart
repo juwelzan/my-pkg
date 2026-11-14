@@ -22,6 +22,8 @@ export 'src/paging/omni_pager.dart';
 export 'src/paging/pagination_strategy.dart';
 export 'src/resilience/circuit_breaker.dart';
 export 'src/resilience/retry_policy.dart';
+export 'src/state/request_controller.dart';
+export 'src/state/request_state.dart';
 export 'src/transfer/multipart.dart';
 export 'src/transport/dio_transport.dart' show DioTransport;
 export 'src/transport/mock_transport.dart' show MockTransport, MockHandler;

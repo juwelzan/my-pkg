@@ -73,9 +73,15 @@ void main() {
   group('standard (HTTP semantics)', () {
     test('fresh entry served without network', () async {
       client();
-      expect(await getText('/a'), ('{"v":1,"path":"/a"}', ResponseSource.network));
+      expect(await getText('/a'), (
+        '{"v":1,"path":"/a"}',
+        ResponseSource.network,
+      ));
       version = 2;
-      expect(await getText('/a'), ('{"v":1,"path":"/a"}', ResponseSource.cache));
+      expect(await getText('/a'), (
+        '{"v":1,"path":"/a"}',
+        ResponseSource.cache,
+      ));
       expect(mock.requests, hasLength(1));
     });
 
@@ -97,7 +103,10 @@ void main() {
       await get('/a');
       now = now.add(const Duration(minutes: 2));
       version = 2;
-      expect(await getText('/a'), ('{"v":2,"path":"/a"}', ResponseSource.network));
+      expect(await getText('/a'), (
+        '{"v":2,"path":"/a"}',
+        ResponseSource.network,
+      ));
       expect((await get('/a')).$1, {'v': 2, 'path': '/a'});
     });
 
@@ -240,7 +249,10 @@ void main() {
       await get('/a');
       now = now.add(const Duration(seconds: 11));
       version = 2;
-      expect(await getText('/a'), ('{"v":1,"path":"/a"}', ResponseSource.cache));
+      expect(await getText('/a'), (
+        '{"v":1,"path":"/a"}',
+        ResponseSource.cache,
+      ));
       await Future<void>.delayed(const Duration(milliseconds: 10));
       expect(mock.requests, hasLength(2)); // background refresh
       expect((await get('/a')).$1, {'v': 2, 'path': '/a'});
