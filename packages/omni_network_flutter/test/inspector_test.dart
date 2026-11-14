@@ -1,0 +1,267 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:omni_network/omni_network.dart';
+import 'package:omni_network_flutter/omni_network_flutter.dart';
+
+void main() {
+  late OmniMock mock;
+
+  setUp(() {
+    mock = OmniMock()
+      ..get(
+        '/users',
+        (_) => MockResponse.json([
+          {'id': 1},
+        ]),
+      )
+      ..get('/missing', (_) => const MockResponse.status(404))
+      ..get('/down', (_) => const MockResponse.offline())
+      ..post(
+        '/login',
+        (_) => MockResponse.json({'access_token': 'TOKEN-SECRET'}),
+      );
+  });
+
+  OmniNetwork client(OmniInspector inspector, [String label = 'api']) =>
+      OmniNetwork(
+        baseUrl: 'https://api.test',
+        headers: {'Authorization': 'Bearer HEADER-SECRET'},
+        transport: mock,
+        enableLogging: inspector.enabled,
+        logSink: inspector.sink(label),
+      );
+
+  Future<void> traffic(WidgetTester tester, OmniNetwork api) =>
+      tester.runAsync(() async {
+        await api.get<dynamic>('/users');
+        await api.sendRaw(const OmniRequest.get('/missing'));
+        await api.sendRaw(const OmniRequest.get('/down')).asResult();
+        await api.sendRaw(
+          const OmniRequest.post(
+            '/login',
+            body: {'user': 'ana', 'password': 'PW-SECRET'},
+          ),
+        );
+      });
+
+  group('OmniInspector collector', () {
+    testWidgets('pairs requests with responses and errors', (tester) async {
+      final inspector = OmniInspector(enabled: true);
+      addTearDown(inspector.dispose);
+      final api = client(inspector);
+      await traffic(tester, api);
+      await tester.runAsync(api.close);
+      final e = inspector.entries; // newest first
+      expect(e.map((x) => (x.method, x.status)), [
+        ('POST', InspectorStatus.success),
+        ('GET', InspectorStatus.failed),
+        ('GET', InspectorStatus.clientError),
+        ('GET', InspectorStatus.success),
+      ]);
+      expect(e[1].error, startsWith('ConnectionFailure'));
+      expect(e.last.source, ResponseSource.network);
+      expect(e.last.duration, isNotNull);
+    });
+
+    testWidgets('secrets never reach the inspector', (tester) async {
+      final inspector = OmniInspector(enabled: true);
+      addTearDown(inspector.dispose);
+      final api = client(inspector);
+      await traffic(tester, api);
+      await tester.runAsync(api.close);
+      final dump = [
+        for (final x in inspector.entries)
+          '${x.url}${x.requestHeaders}${x.requestBody}${x.responseHeaders}${x.responseBody}${x.toCurl()}',
+      ].join();
+      for (final s in ['HEADER-SECRET', 'PW-SECRET', 'TOKEN-SECRET']) {
+        expect(dump, isNot(contains(s)));
+      }
+      expect(dump, contains('"user":"ana"'));
+    });
+
+    testWidgets('disabled: records nothing but still forwards', (tester) async {
+      final forwarded = <NetworkLogRecord>[];
+      final inspector = OmniInspector(
+        enabled: false,
+        forwardTo: _ListSink(forwarded),
+      );
+      addTearDown(inspector.dispose);
+      final api = OmniNetwork(
+        baseUrl: 'https://api.test',
+        transport: mock,
+        enableLogging: true,
+        logSink: inspector,
+      );
+      await tester.runAsync(() => api.get<dynamic>('/users'));
+      await tester.runAsync(api.close);
+      expect(inspector.entries, isEmpty);
+      expect(forwarded, hasLength(2));
+    });
+
+    testWidgets('bounded; labels keep clients apart; clear', (tester) async {
+      final inspector = OmniInspector(enabled: true, maxEntries: 3);
+      addTearDown(inspector.dispose);
+      final a = client(inspector, 'a');
+      final b = client(inspector, 'b');
+      await tester.runAsync(() async {
+        // Same request ids (#1, #2) in both clients.
+        await a.get<dynamic>('/users');
+        await b.sendRaw(const OmniRequest.get('/missing'));
+        await a.sendRaw(const OmniRequest.get('/missing'));
+        await b.get<dynamic>('/users');
+      });
+      await tester.runAsync(() => Future.wait([a.close(), b.close()]));
+      expect(inspector.entries.map((e) => (e.label, e.statusCode)), [
+        ('b', 200),
+        ('a', 404),
+        ('b', 404),
+      ]);
+      var notified = 0;
+      inspector.addListener(() => notified++);
+      inspector.clear();
+      expect(inspector.entries, isEmpty);
+      expect(notified, 1);
+    });
+  });
+
+  group('UI', () {
+    testWidgets('list, filter, detail, copy cURL, back', (tester) async {
+      final inspector = OmniInspector(enabled: true);
+      addTearDown(inspector.dispose);
+      final api = client(inspector);
+      await traffic(tester, api);
+      await tester.runAsync(api.close);
+      String? clipboard;
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async {
+          if (call.method == 'Clipboard.setData') {
+            clipboard = (call.arguments as Map)['text'] as String?;
+          }
+          return null;
+        },
+      );
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          null,
+        ),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(home: OmniInspectorView(inspector: inspector)),
+      );
+      expect(find.text('Network (4)'), findsOneWidget);
+      expect(find.text('404'), findsOneWidget);
+      expect(find.text('ERR'), findsOneWidget);
+
+      await tester.enterText(find.byType(TextField), 'login');
+      await tester.pump();
+      expect(find.byType(ListTile), findsOneWidget);
+
+      await tester.tap(find.byType(ListTile));
+      await tester.pump();
+      expect(find.text('POST 200'), findsOneWidget);
+      expect(find.textContaining('authorization: ***'), findsOneWidget);
+      expect(find.textContaining('HEADER-SECRET'), findsNothing);
+
+      await tester.tap(find.byTooltip('Copy as cURL'));
+      await tester.pump();
+      expect(clipboard, startsWith("curl -X POST 'https://api.test/login'"));
+      expect(clipboard, contains('***'));
+      expect(clipboard, isNot(contains('PW-SECRET')));
+
+      await tester.tap(find.byTooltip('Back'));
+      await tester.pump();
+      expect(find.byType(ListTile), findsOneWidget); // filter kept
+
+      await tester.tap(find.byTooltip('Clear'));
+      await tester.pump();
+      expect(find.text('No requests'), findsOneWidget);
+    });
+
+    testWidgets('list updates live as requests arrive', (tester) async {
+      final inspector = OmniInspector(enabled: true);
+      addTearDown(inspector.dispose);
+      await tester.pumpWidget(
+        MaterialApp(home: OmniInspectorView(inspector: inspector)),
+      );
+      expect(find.text('No requests'), findsOneWidget);
+      final api = client(inspector);
+      await tester.runAsync(() => api.get<dynamic>('/users'));
+      await tester.runAsync(api.close);
+      await tester.pump();
+      expect(find.text('200'), findsOneWidget);
+    });
+
+    testWidgets(
+      'launcher from MaterialApp.builder opens and closes the panel',
+      (tester) async {
+        final inspector = OmniInspector(enabled: true);
+        addTearDown(inspector.dispose);
+        await tester.pumpWidget(
+          MaterialApp(
+            builder: (context, child) =>
+                OmniInspectorLauncher(inspector: inspector, child: child!),
+            home: const Scaffold(body: Text('app')),
+          ),
+        );
+        expect(find.text('app'), findsOneWidget);
+        await tester.tap(find.byTooltip('Open network inspector'));
+        await tester.pump();
+        expect(find.text('Network (0)'), findsOneWidget);
+        await tester.enterText(find.byType(TextField), 'x'); // needs an Overlay
+        await tester.pump();
+        await tester.tap(find.byTooltip('Close inspector'));
+        await tester.pump();
+        expect(find.text('Network (0)'), findsNothing);
+        expect(find.byTooltip('Open network inspector'), findsOneWidget);
+        // Unmount: OverlayEntry and controllers disposed (leak tracking on).
+        await tester.pumpWidget(const SizedBox());
+      },
+    );
+
+    testWidgets('app below the launcher still receives taps and rebuilds', (
+      tester,
+    ) async {
+      final inspector = OmniInspector(enabled: true);
+      addTearDown(inspector.dispose);
+      var taps = 0;
+      Widget app(String label) => MaterialApp(
+        builder: (context, child) =>
+            OmniInspectorLauncher(inspector: inspector, child: child!),
+        home: Scaffold(
+          body: Center(
+            child: TextButton(onPressed: () => taps++, child: Text(label)),
+          ),
+        ),
+      );
+      await tester.pumpWidget(app('one'));
+      await tester.tap(find.text('one'));
+      expect(taps, 1);
+      await tester.pumpWidget(app('two'));
+      expect(find.text('two'), findsOneWidget);
+    });
+
+    testWidgets('disabled launcher renders only the app', (tester) async {
+      final inspector = OmniInspector(enabled: false);
+      addTearDown(inspector.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          builder: (context, child) =>
+              OmniInspectorLauncher(inspector: inspector, child: child!),
+          home: const Text('app'),
+        ),
+      );
+      expect(find.byTooltip('Open network inspector'), findsNothing);
+    });
+  });
+}
+
+final class _ListSink implements LogSink {
+  _ListSink(this.out);
+  final List<NetworkLogRecord> out;
+  @override
+  void log(NetworkLogRecord r) => out.add(r);
+}

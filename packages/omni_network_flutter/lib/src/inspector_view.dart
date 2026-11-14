@@ -224,7 +224,7 @@ class _OmniInspectorViewState extends State<OmniInspectorView> {
                   [
                     if (e.duration case final d?) '${d.inMilliseconds} ms',
                     if (e.source case final s?) s.name,
-                    if (e.error case final err?) err,
+                    ?e.error,
                   ].join(' · '),
                 ),
               ),
@@ -272,49 +272,64 @@ class OmniInspectorLauncher extends StatefulWidget {
 
 class _OmniInspectorLauncherState extends State<OmniInspectorLauncher> {
   bool _open = false;
-  late final OverlayEntry _panel = OverlayEntry(
-    builder: (_) => OmniInspectorView(
-      inspector: widget.inspector,
-      onClose: () => setState(() => _open = false),
-    ),
-  );
+
+  /// Whether the entries were handed to our [Overlay] (they then must be
+  /// removed before being disposed).
+  bool _inserted = false;
+
+  late final OverlayEntry _app = OverlayEntry(builder: (_) => widget.child);
+  late final OverlayEntry _ui = OverlayEntry(builder: _buildUi);
+
+  void _toggle() {
+    _open = !_open;
+    _ui.markNeedsBuild();
+  }
+
+  @override
+  void didUpdateWidget(OmniInspectorLauncher old) {
+    super.didUpdateWidget(old);
+    _app.markNeedsBuild();
+    _ui.markNeedsBuild();
+  }
 
   @override
   void dispose() {
-    if (_panel.mounted) _panel.remove();
-    _panel.dispose();
+    if (_inserted) {
+      _app.remove();
+      _ui.remove();
+    }
+    _app.dispose();
+    _ui.dispose();
     super.dispose();
+  }
+
+  Widget _buildUi(BuildContext context) {
+    if (_open) {
+      return OmniInspectorView(inspector: widget.inspector, onClose: _toggle);
+    }
+    return Align(
+      alignment: widget.alignment,
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: FloatingActionButton.small(
+            heroTag: null,
+            tooltip: 'Open network inspector',
+            onPressed: _toggle,
+            child: const Icon(Icons.network_check),
+          ),
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     if (!widget.inspector.enabled) return widget.child;
-    return Stack(
-      children: [
-        widget.child,
-        if (_open)
-          // Own Overlay: text fields need one, and MaterialApp.builder sits
-          // above the app's Navigator/Overlay.
-          Positioned.fill(child: Overlay(initialEntries: [_panel]))
-        else
-          Align(
-            alignment: widget.alignment,
-            child: SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Material(
-                  type: MaterialType.transparency,
-                  child: FloatingActionButton.small(
-                    heroTag: null,
-                    tooltip: 'Open network inspector',
-                    onPressed: () => setState(() => _open = true),
-                    child: const Icon(Icons.network_check),
-                  ),
-                ),
-              ),
-            ),
-          ),
-      ],
-    );
+    _inserted = true;
+    // Own Overlay: tooltips and text fields need one, and
+    // MaterialApp.builder sits above the app's Navigator/Overlay. The app
+    // is the bottom entry, the button/panel the top one.
+    return Overlay(initialEntries: [_app, _ui]);
   }
 }
