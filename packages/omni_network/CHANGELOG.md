@@ -163,3 +163,13 @@
   configuration. **Breaking:** `auth:` takes an `AuthProvider` (`OmniAuth` or
   `BearerAuth`); `BearerAuth` moved to `advanced.dart`. One `OmniAuth` per
   client (checked at construction).
+- S5 (simplification): `enableLogging: true` now prints each call as one
+  framed block (`PrettyLogSink`, the new default sink): method, URL,
+  status with reason, time, size, pretty-printed JSON (cut after
+  `maxLines`), `↻ retry n/m` and `🔑 token refreshed` notes, `cache` marker,
+  colours when the terminal supports them. One `print` per call, so
+  concurrent calls never interleave. `LogOptions` (`headers`,
+  `requestBody`, `responseBody`, `maxLines`, `colors`, `width`). Release
+  builds never log unless `logInRelease: true`; `api.isLogging`.
+  `NetworkLogRecord.note` and `.bytes`. The compact `PrintLogSink` stays in
+  `advanced.dart`.

@@ -49,3 +49,4 @@ export 'src/state/request_state.dart'
         RequestSuccess,
         RequestEmpty,
         RequestError;
+export 'src/log/pretty_log.dart' show LogOptions;

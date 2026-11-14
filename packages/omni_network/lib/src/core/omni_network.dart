@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:meta/meta.dart';
+
 import '../auth/bearer_auth.dart';
 import '../auth/omni_auth.dart';
 import '../cache/omni_cache.dart';
@@ -9,6 +11,7 @@ import '../curl/curl.dart';
 import '../endpoint/endpoint.dart';
 import '../log/network_log.dart';
 import '../log/network_logger.dart';
+import '../log/pretty_log.dart';
 import '../log/redactor.dart';
 import '../paging/omni_pager.dart';
 import '../paging/pagination_strategy.dart';
@@ -51,11 +54,13 @@ final class OmniNetwork {
   ///   transport you pass in is **not** closed by [close]; you own it.
   /// * [responseAdapter]: applied to every JSON body before decoding,
   ///   e.g. [EnvelopeResponseAdapter]; overridable per call.
-  /// * [enableLogging]: the single logging switch, default `false`. When
-  ///   off, nothing is formatted and [logSink] is never called. When on,
-  ///   every request, response and failure goes to [logSink] (default:
-  ///   [PrintLogSink]) after [redactor] masked secrets; [logBodies]
-  ///   includes redacted, truncated bodies. Redaction cannot be disabled.
+  /// * [enableLogging]: the single logging switch (`true`/`false`, default
+  ///   `false`). When on, each call is printed in the terminal as one framed
+  ///   block — method, URL, status, time, size and the pretty-printed
+  ///   response — see [PrettyLogSink] and [logOptions]. Secrets are always
+  ///   redacted by [redactor]. Release builds never log unless
+  ///   [logInRelease] is `true`. When off, nothing is formatted and
+  ///   [logSink] is never called. Pass [logSink] to send records elsewhere.
   /// * [interceptors]: see [OmniInterceptor].
   /// * [auth]: token management, usually an [OmniAuth] (login/logout,
   ///   refresh on 401 or before expiry, storage). Without [auth] and
@@ -78,6 +83,8 @@ final class OmniNetwork {
     this.responseAdapter = const PlainResponseAdapter(),
     this.enableLogging = false,
     LogSink? logSink,
+    LogOptions logOptions = const LogOptions(),
+    bool logInRelease = false,
     this.redactor = const Redactor(),
     bool logBodies = true,
     List<OmniInterceptor> interceptors = const [],
@@ -94,9 +101,9 @@ final class OmniNetwork {
        _provider =
            auth ?? (token == null ? OmniAuth() : BearerAuth(token: token)),
        interceptors = List.unmodifiable(interceptors),
-       _logger = enableLogging
+       _logger = enableLogging && (logInRelease || !isReleaseBuild)
            ? NetworkLogger(
-               logSink ?? const PrintLogSink(),
+               logSink ?? PrettyLogSink(options: logOptions),
                redactor,
                logBodies: logBodies,
              )
@@ -156,8 +163,16 @@ final class OmniNetwork {
   /// Redaction rules for logs and [toCurl].
   final Redactor redactor;
 
-  /// Whether requests are logged. See the constructor.
+  /// Whether logging was requested. See the constructor and [isLogging].
   final bool enableLogging;
+
+  /// Whether calls are actually logged (`enableLogging`, and not a release
+  /// build unless `logInRelease`).
+  bool get isLogging => _logger != null;
+
+  /// Whether this is a release/product build. Tests may override it.
+  @visibleForTesting
+  static bool isReleaseBuild = const bool.fromEnvironment('dart.vm.product');
 
   final NetworkLogger? _logger;
   int _logSeq = 0;
@@ -919,7 +934,12 @@ final class OmniNetwork {
       final last = attempt >= policy.maxAttempts;
       Duration? wait;
       try {
-        final res = await _guarded(request, t, epoch);
+        final res = attempt == 1
+            ? await _guarded(request, t, epoch)
+            : await withLogNote(
+                'retry $attempt/${policy.maxAttempts}',
+                () => _guarded(request, t, epoch),
+              );
         if (last || !policy.statuses.contains(res.statusCode)) return res;
         wait = policy.delayFor(attempt, res);
         if (wait == null) return res;
@@ -994,13 +1014,22 @@ final class OmniNetwork {
         request.header(auth.headerName) != null) {
       return _sendOnce(request, t);
     }
+    final refreshesBefore = auth.refreshCount;
     final used = await auth.current();
     _checkStillWanted(request, epoch);
-    final first = await _sendOnce(auth.attach(request, used), t);
+    final first = auth.refreshCount == refreshesBefore
+        ? await _sendOnce(auth.attach(request, used), t)
+        : await withLogNote(
+            'token refreshed',
+            () => _sendOnce(auth.attach(request, used), t),
+          );
     if (auth.refresh == null || !auth.isExpired(first)) return first;
     final fresh = await auth.recover(used, first);
     _checkStillWanted(request, epoch);
-    return _sendOnce(auth.attach(request, fresh), t);
+    return withLogNote(
+      'token refreshed',
+      () => _sendOnce(auth.attach(request, fresh), t),
+    );
   }
 
   void _checkStillWanted(OmniRequest request, int epoch) {

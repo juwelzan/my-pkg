@@ -33,7 +33,7 @@ What the inspector sees and keeps:
   `Redactor` has run, so tokens, cookies and passwords never reach the UI or
   the clipboard.
 - **Bounded.** It keeps at most `maxEntries` entries.
-- **Forwarding.** `forwardTo: const PrintLogSink()` also prints every record.
+- **Forwarding.** `forwardTo: PrettyLogSink()` also prints every call in the terminal.
 
 ## Example
 

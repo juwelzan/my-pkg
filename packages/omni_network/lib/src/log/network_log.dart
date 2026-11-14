@@ -30,6 +30,8 @@ final class NetworkLogRecord {
     this.duration,
     this.error,
     this.source,
+    this.note,
+    this.bytes,
   });
 
   /// Kind of event.
@@ -61,6 +63,12 @@ final class NetworkLogRecord {
 
   /// Where the response came from ([NetworkLogKind.response] only).
   final ResponseSource? source;
+
+  /// Context for a request, e.g. `retry 2/3` or `token refreshed`.
+  final String? note;
+
+  /// Response body size in bytes ([NetworkLogKind.response] only).
+  final int? bytes;
 
   /// Human-readable, multi-line rendering.
   final String message;

@@ -28,3 +28,4 @@ export 'src/transfer/stream_target.dart' show OmniStreamResponse;
 export 'src/transport/dio_transport.dart' show DioTransport;
 export 'src/transport/transport.dart'
     show Transport, TransportRequest, StreamedResponse;
+export 'src/log/pretty_log.dart' show PrettyLogSink;

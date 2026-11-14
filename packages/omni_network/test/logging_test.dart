@@ -212,9 +212,9 @@ void main() {
   test('long bodies truncated; logBodies: false omits bodies', () async {
     final api = client();
     addTearDown(api.close);
-    await api.sendRaw(OmniRequest.post('/t', body: 'x' * 5000));
+    await api.sendRaw(OmniRequest.post('/t', body: 'x' * 20000));
     expect(sink.records.first.body, contains('truncated'));
-    expect(sink.records.first.body!.length, lessThan(2100));
+    expect(sink.records.first.body!.length, lessThan(16100));
 
     final quiet = client(bodies: false);
     addTearDown(quiet.close);

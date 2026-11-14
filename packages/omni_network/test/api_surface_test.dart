@@ -27,6 +27,7 @@ const simple = [
   'Ok',
   'Err',
   'OmniAuth',
+  'LogOptions',
   'Tokens',
   'AuthState',
   'OmniInterceptor',
@@ -52,6 +53,7 @@ const simple = [
 /// Low-level names that must NOT leak into the simple import.
 const advancedOnly = [
   'BearerAuth',
+  'PrettyLogSink',
   'AuthProvider',
   'TokenStorage',
   'MemoryTokenStorage',

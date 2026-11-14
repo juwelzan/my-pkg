@@ -130,33 +130,72 @@ switch (await api.get<User>('/me', decoder: User.fromJson).asResult()) {
 
 ## Logging and redaction
 
-`Redactor` and `LogSink` come from `advanced.dart`.
-
-One switch, off by default:
+One `true`/`false` switch prints every call in the terminal while you
+develop:
 
 ```dart
 final api = OmniNetwork(baseUrl: url, enableLogging: true);
-// [OmniNetwork #1] --> POST https://api.example.com/login?token=***
-//   headers: {authorization: ***, content-type: application/json; charset=utf-8}
-//   body: {"user":"ana","password":"***"}
 ```
 
-Redaction cannot be switched off, only extended:
+```
+┌────────────────────────────────────────────────────────────
+│ GET  https://api.example.com/v1/users/10
+│ 🔑 token refreshed
+├────────────────────────────────────────────────────────────
+│ ✔ 200 OK · 142 ms · 1.2 KB
+│ {
+│   "id": 10,
+│   "name": "Ana",
+│   "access_token": "***"
+│ }
+└────────────────────────────────────────────────────────────
+
+┌────────────────────────────────────────────────────────────
+│ POST https://api.example.com/v1/orders
+│ ⇢ body  {"item":7,"password":"***"}
+├────────────────────────────────────────────────────────────
+│ ✖ 422 Unprocessable Entity · 88 ms · 29 B
+│ {
+│   "error": "qty must be ≤ 1"
+│ }
+└────────────────────────────────────────────────────────────
+```
+
+What each block shows:
+
+- **One block per call.** Method, URL, status, time, size and the
+  pretty-printed JSON. Request and response are printed together, so
+  concurrent calls never mix.
+- **Retries and token refresh.** `↻ retry 2/3` and `🔑 token refreshed`
+  lines; cache hits are marked `· cache`.
+- **Colours.** Green for 2xx, yellow for 4xx, red for 5xx and failures, when
+  the terminal supports colours.
+- **Secrets.** Always `***`: auth and cookie headers, token, password and
+  API-key fields, query values and URL user info. This cannot be turned off,
+  only extended with `redactor: Redactor(extraKeys: {...})` from
+  `advanced.dart`.
+- **Release builds.** Logging is off in release builds even when
+  `enableLogging: true`. `logInRelease: true` overrides that, and
+  `api.isLogging` tells you whether calls are being logged.
+
+Optional formatting; every field has a default:
 
 ```dart
-redactor: const Redactor(extraHeaders: {'X-Tenant'}, extraKeys: {'national_id'})
+OmniNetwork(
+  baseUrl: url,
+  enableLogging: true,
+  logOptions: const LogOptions(
+    headers: true,       // default false
+    requestBody: true,   // default true
+    responseBody: true,  // default true
+    maxLines: 30,        // then "… N more lines"
+    colors: null,        // null = auto
+  ),
+);
 ```
 
-These are always masked:
-
-- auth, cookie and API-key headers;
-- query and JSON or form keys that contain `token`, `password`, `secret`,
-  `apikey`, `session` and similar words;
-- URL user info.
-
-Binary and multipart bodies are only summarised by size, and other bodies
-are truncated. To send logs elsewhere (`package:logger`, a file, a crash
-reporter), pass `logSink:`.
+To send records elsewhere (a file, `package:logger`, a crash reporter, the
+Flutter inspector), pass `logSink:` (`LogSink` from `advanced.dart`).
 
 ## Auth and interceptors
 
