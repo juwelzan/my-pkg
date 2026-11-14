@@ -24,8 +24,8 @@ void main() {
 
   group('URL resolution', () {
     test('joins base path with leading-slash and bare paths', () async {
-      await api.send(const OmniRequest.get('/users/10'));
-      await api.send(const OmniRequest.get('users/11'));
+      await api.sendRaw(const OmniRequest.get('/users/10'));
+      await api.sendRaw(const OmniRequest.get('users/11'));
       expect(mock.requests.map((r) => '${r.uri}'), [
         'https://api.example.com/v1/users/10',
         'https://api.example.com/v1/users/11',
@@ -78,7 +78,7 @@ void main() {
     test('relative path without baseUrl is a RequestFailure', () {
       final a = OmniNetwork(transport: mock);
       expect(
-        () => a.send(const OmniRequest.get('/x')),
+        () => a.sendRaw(const OmniRequest.get('/x')),
         throwsA(isA<RequestFailure>()),
       );
     });
@@ -112,7 +112,7 @@ void main() {
         const OmniRequest.delete('/a'),
         const OmniRequest.head('/a'),
       ]) {
-        await api.send(r);
+        await api.sendRaw(r);
       }
       expect(mock.requests.map((r) => r.method.verb), [
         'GET',
@@ -125,7 +125,7 @@ void main() {
     });
 
     test('request headers override defaults case-insensitively', () async {
-      await api.send(const OmniRequest.get('/a', headers: {'x-APP': 'b'}));
+      await api.sendRaw(const OmniRequest.get('/a', headers: {'x-APP': 'b'}));
       expect(mock.requests.single.headers, {
         'accept': 'application/json',
         'x-app': 'b',
@@ -133,15 +133,15 @@ void main() {
     });
 
     test('JSON body encoded with content type', () async {
-      await api.send(const OmniRequest.post('/u', body: {'name': 'Ana'}));
+      await api.sendRaw(const OmniRequest.post('/u', body: {'name': 'Ana'}));
       final r = mock.requests.single;
       expect(utf8.decode(r.body!), '{"name":"Ana"}');
       expect(r.headers['content-type'], 'application/json; charset=utf-8');
     });
 
     test('string and byte bodies; explicit content type kept', () async {
-      await api.send(const OmniRequest.post('/t', body: 'hi'));
-      await api.send(
+      await api.sendRaw(const OmniRequest.post('/t', body: 'hi'));
+      await api.sendRaw(
         OmniRequest.put(
           '/b',
           body: Uint8List.fromList([1, 2, 3]),
@@ -158,15 +158,15 @@ void main() {
 
     test('GET with body and unsupported body types rejected', () {
       expect(
-        () => api.send(OmniRequest(HttpMethod.get, '/a', body: 'x')),
+        () => api.sendRaw(OmniRequest(HttpMethod.get, '/a', body: 'x')),
         throwsA(isA<RequestFailure>()),
       );
       expect(
-        () => api.send(OmniRequest.post('/a', body: Object())),
+        () => api.sendRaw(OmniRequest.post('/a', body: Object())),
         throwsA(isA<RequestFailure>()),
       );
       expect(
-        () => api.send(OmniRequest.post('/a', body: [Object()])),
+        () => api.sendRaw(OmniRequest.post('/a', body: [Object()])),
         throwsA(isA<RequestFailure>()),
       );
       expect(mock.requests, isEmpty);
@@ -180,7 +180,7 @@ void main() {
         headers: {'Content-Type': 'application/json'},
         bodyBytes: utf8.encode('{"error":"nope"}'),
       );
-      final res = await api.send(const OmniRequest.get('/missing'));
+      final res = await api.sendRaw(const OmniRequest.get('/missing'));
       expect(res.statusCode, 404);
       expect(res.isSuccess, isFalse);
       expect(res.headers['content-type'], 'application/json');
@@ -192,7 +192,7 @@ void main() {
         await Future<void>.delayed(const Duration(milliseconds: 20));
         return ok();
       };
-      final res = await api.send(const OmniRequest.get('/a'));
+      final res = await api.sendRaw(const OmniRequest.get('/a'));
       expect(
         res.duration,
         greaterThanOrEqualTo(const Duration(milliseconds: 15)),
@@ -210,11 +210,11 @@ void main() {
         transport: mock,
       );
       await expectLater(
-        fast.send(const OmniRequest.get('/a')),
+        fast.sendRaw(const OmniRequest.get('/a')),
         throwsA(isA<TimeoutFailure>()),
       );
       await expectLater(
-        api.send(
+        api.sendRaw(
           const OmniRequest.get('/a', timeout: Duration(milliseconds: 30)),
         ),
         throwsA(
@@ -233,7 +233,7 @@ void main() {
     test('transport exceptions become ConnectionFailure', () async {
       mock.handler = (_) => throw const FormatException('boom');
       await expectLater(
-        api.send(const OmniRequest.get('/a')),
+        api.sendRaw(const OmniRequest.get('/a')),
         throwsA(isA<ConnectionFailure>()),
       );
     });
@@ -246,7 +246,9 @@ void main() {
         transport: MockTransport((_) => Completer<OmniRawResponse>().future),
       );
       try {
-        await a.send(const OmniRequest.get('/a', query: {'token': 'S3CRET'}));
+        await a.sendRaw(
+          const OmniRequest.get('/a', query: {'token': 'S3CRET'}),
+        );
         fail('should time out');
       } on TimeoutFailure catch (e) {
         expect('$e', isNot(contains('S3CRET')));
@@ -259,7 +261,7 @@ void main() {
   group('close / disposal', () {
     test('close fails in-flight requests and rejects new ones', () async {
       mock.handler = (_) => Completer<OmniRawResponse>().future;
-      final f = api.send(const OmniRequest.get('/slow'));
+      final f = api.sendRaw(const OmniRequest.get('/slow'));
       await Future<void>.delayed(Duration.zero);
       expect(api.pendingRequests, 1);
       await api.close();
@@ -267,7 +269,7 @@ void main() {
       expect(api.pendingRequests, 0);
       expect(mock.inFlight, 0);
       await expectLater(
-        api.send(const OmniRequest.get('/a')),
+        api.sendRaw(const OmniRequest.get('/a')),
         throwsA(isA<ClosedFailure>()),
       );
     });
@@ -284,7 +286,7 @@ void main() {
 
     test('timers are released: no pending work after many requests', () async {
       for (var i = 0; i < 200; i++) {
-        await api.send(const OmniRequest.get('/a'));
+        await api.sendRaw(const OmniRequest.get('/a'));
       }
       expect(api.pendingRequests, 0);
       expect(mock.inFlight, 0);

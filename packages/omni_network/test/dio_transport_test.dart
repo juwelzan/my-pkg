@@ -55,7 +55,7 @@ void main() {
   });
 
   test('round-trips method, path, query, headers and JSON body', () async {
-    final res = await api.send(
+    final res = await api.sendRaw(
       OmniRequest.post(
         '/users',
         query: {
@@ -80,19 +80,19 @@ void main() {
   });
 
   test('404 is returned as a response', () async {
-    final res = await api.send(const OmniRequest.get('/missing'));
+    final res = await api.sendRaw(const OmniRequest.get('/missing'));
     expect(res.statusCode, 404);
   });
 
   test('HEAD has no body', () async {
-    final res = await api.send(const OmniRequest.head('/x'));
+    final res = await api.sendRaw(const OmniRequest.head('/x'));
     expect(res.statusCode, 200);
     expect(res.bodyBytes, isEmpty);
   });
 
   test('timeout aborts a hanging request', () async {
     await expectLater(
-      api.send(
+      api.sendRaw(
         const OmniRequest.get('/hang', timeout: Duration(milliseconds: 100)),
       ),
       throwsA(isA<TimeoutFailure>()),
@@ -101,7 +101,7 @@ void main() {
   });
 
   test('close aborts in-flight request with ClosedFailure', () async {
-    final f = api.send(const OmniRequest.get('/hang'));
+    final f = api.sendRaw(const OmniRequest.get('/hang'));
     while (hang.isEmpty) {
       await Future<void>.delayed(const Duration(milliseconds: 5));
     }
@@ -115,7 +115,7 @@ void main() {
     final dead = OmniNetwork(baseUrl: 'http://127.0.0.1:$port');
     addTearDown(dead.close);
     await expectLater(
-      dead.send(const OmniRequest.get('/a')),
+      dead.sendRaw(const OmniRequest.get('/a')),
       throwsA(isA<ConnectionFailure>()),
     );
     server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);

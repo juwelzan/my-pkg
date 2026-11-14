@@ -5,16 +5,17 @@ import 'dart:typed_data';
 import '../transport/dio_transport.dart';
 import '../transport/transport.dart';
 import 'cancel_signal.dart';
+import 'decoding.dart';
 import 'omni_network_exception.dart';
 import 'omni_request.dart';
 import 'omni_response.dart';
+import 'response_adapter.dart';
 
 /// An HTTP client. Independent of Flutter, routing and state management.
 ///
 /// ```dart
 /// final api = OmniNetwork(baseUrl: 'https://api.example.com/v1');
-/// final res = await api.send(const OmniRequest.get('/users/10'));
-/// print(res.statusCode);
+/// final user = await api.get<User>('/users/10', decoder: User.fromJson);
 /// await api.close();
 /// ```
 final class OmniNetwork {
@@ -26,11 +27,14 @@ final class OmniNetwork {
   /// * [timeout]: overall deadline per request (connect + send + receive).
   /// * [transport]: defaults to a [DioTransport] owned by this client. A
   ///   transport you pass in is **not** closed by [close]; you own it.
+  /// * [responseAdapter]: applied to every JSON body before decoding,
+  ///   e.g. [EnvelopeResponseAdapter]; overridable per call.
   OmniNetwork({
     String? baseUrl,
     Map<String, String> headers = const {},
     this.timeout = const Duration(seconds: 30),
     Transport? transport,
+    this.responseAdapter = const PlainResponseAdapter(),
   }) : baseUri = baseUrl == null ? null : _parseBase(baseUrl),
        headers = Map.unmodifiable(_lower(headers)),
        _transport = transport ?? DioTransport(),
@@ -45,6 +49,9 @@ final class OmniNetwork {
   /// Default overall request timeout.
   final Duration timeout;
 
+  /// Default [ResponseAdapter] for typed calls.
+  final ResponseAdapter responseAdapter;
+
   final Transport _transport;
   final bool _ownsTransport;
   final Set<CancelSignal> _pending = {};
@@ -57,11 +64,197 @@ final class OmniNetwork {
   /// Number of requests currently in flight.
   int get pendingRequests => _pending.length;
 
-  /// Sends [request] and returns the raw response for any status code.
+  /// Sends [request] and decodes a 2xx body into `T`.
+  ///
+  /// With [decoder], the body must be a JSON object (after [adapter]).
+  /// Without it: nullable `T` (incl. `void`) accepts an empty body;
+  /// `String` returns the text; `void`/`dynamic`/`Object?` return the parsed
+  /// JSON, or the text if it is not JSON; other `T` (e.g. `int`,
+  /// `Map<String, dynamic>`) are cast from the parsed JSON.
+  ///
+  /// Throws [HttpFailure] for non-2xx, [DecodeFailure] for a bad body, and
+  /// everything [sendRaw] throws.
+  Future<OmniResponse<T>> send<T>(
+    OmniRequest request, {
+    JsonDecoder<T>? decoder,
+    ResponseAdapter? adapter,
+  }) async {
+    final raw = await _ok(request);
+    return OmniResponse(
+      decodeBody<T>(raw, decoder, adapter ?? responseAdapter),
+      raw,
+    );
+  }
+
+  /// Like [send] for a JSON array of objects.
+  Future<OmniResponse<List<T>>> sendList<T>(
+    OmniRequest request, {
+    required JsonDecoder<T> decoder,
+    ResponseAdapter? adapter,
+  }) async {
+    final raw = await _ok(request);
+    return OmniResponse(
+      decodeList<T>(raw, decoder, adapter ?? responseAdapter),
+      raw,
+    );
+  }
+
+  /// GET [path] decoded into `T`. See [send].
+  ///
+  /// ```dart
+  /// final user = await api.get<User>('/users/10', decoder: User.fromJson);
+  /// ```
+  Future<T> get<T>(
+    String path, {
+    JsonDecoder<T>? decoder,
+    Map<String, Object?> query = const {},
+    Map<String, String> headers = const {},
+    Duration? timeout,
+    ResponseAdapter? adapter,
+  }) async => (await send<T>(
+    OmniRequest.get(path, query: query, headers: headers, timeout: timeout),
+    decoder: decoder,
+    adapter: adapter,
+  )).data;
+
+  /// GET [path] decoded into `List<T>`. See [sendList].
+  Future<List<T>> getList<T>(
+    String path, {
+    required JsonDecoder<T> decoder,
+    Map<String, Object?> query = const {},
+    Map<String, String> headers = const {},
+    Duration? timeout,
+    ResponseAdapter? adapter,
+  }) async => (await sendList<T>(
+    OmniRequest.get(path, query: query, headers: headers, timeout: timeout),
+    decoder: decoder,
+    adapter: adapter,
+  )).data;
+
+  /// POST [body] to [path]; decodes the response into `T`. See [send].
+  Future<T> post<T>(
+    String path, {
+    Object? body,
+    JsonDecoder<T>? decoder,
+    Map<String, Object?> query = const {},
+    Map<String, String> headers = const {},
+    Duration? timeout,
+    ResponseAdapter? adapter,
+  }) => _body<T>(
+    HttpMethod.post,
+    path,
+    body,
+    decoder,
+    query,
+    headers,
+    timeout,
+    adapter,
+  );
+
+  /// PUT [body] to [path]; decodes the response into `T`. See [send].
+  Future<T> put<T>(
+    String path, {
+    Object? body,
+    JsonDecoder<T>? decoder,
+    Map<String, Object?> query = const {},
+    Map<String, String> headers = const {},
+    Duration? timeout,
+    ResponseAdapter? adapter,
+  }) => _body<T>(
+    HttpMethod.put,
+    path,
+    body,
+    decoder,
+    query,
+    headers,
+    timeout,
+    adapter,
+  );
+
+  /// PATCH [body] to [path]; decodes the response into `T`. See [send].
+  Future<T> patch<T>(
+    String path, {
+    Object? body,
+    JsonDecoder<T>? decoder,
+    Map<String, Object?> query = const {},
+    Map<String, String> headers = const {},
+    Duration? timeout,
+    ResponseAdapter? adapter,
+  }) => _body<T>(
+    HttpMethod.patch,
+    path,
+    body,
+    decoder,
+    query,
+    headers,
+    timeout,
+    adapter,
+  );
+
+  /// DELETE [path]; decodes the response into `T` (often `void`).
+  Future<T> delete<T>(
+    String path, {
+    Object? body,
+    JsonDecoder<T>? decoder,
+    Map<String, Object?> query = const {},
+    Map<String, String> headers = const {},
+    Duration? timeout,
+    ResponseAdapter? adapter,
+  }) => _body<T>(
+    HttpMethod.delete,
+    path,
+    body,
+    decoder,
+    query,
+    headers,
+    timeout,
+    adapter,
+  );
+
+  /// HEAD [path]; returns the 2xx response (status and headers only).
+  Future<OmniRawResponse> head(
+    String path, {
+    Map<String, Object?> query = const {},
+    Map<String, String> headers = const {},
+    Duration? timeout,
+  }) => _ok(
+    OmniRequest.head(path, query: query, headers: headers, timeout: timeout),
+  );
+
+  Future<T> _body<T>(
+    HttpMethod method,
+    String path,
+    Object? body,
+    JsonDecoder<T>? decoder,
+    Map<String, Object?> query,
+    Map<String, String> headers,
+    Duration? timeout,
+    ResponseAdapter? adapter,
+  ) async => (await send<T>(
+    OmniRequest(
+      method,
+      path,
+      body: body,
+      query: query,
+      headers: headers,
+      timeout: timeout,
+    ),
+    decoder: decoder,
+    adapter: adapter,
+  )).data;
+
+  Future<OmniRawResponse> _ok(OmniRequest request) async {
+    final raw = await sendRaw(request);
+    if (!raw.isSuccess) throw HttpFailure(raw);
+    return raw;
+  }
+
+  /// Sends [request] and returns the raw response for **any** status code
+  /// (no decoding, no status check).
   ///
   /// Throws an [OmniNetworkException]: [TimeoutFailure], [ConnectionFailure],
   /// [ClosedFailure] or [RequestFailure].
-  Future<OmniRawResponse> send(OmniRequest request) async {
+  Future<OmniRawResponse> sendRaw(OmniRequest request) async {
     if (_closed) throw const ClosedFailure();
     final resolved = resolve(request);
     final uri = safeUri(resolved.uri);
@@ -77,7 +270,7 @@ final class OmniNetwork {
           (_) => throw CancelledFailure(uri: uri),
         ),
       ]);
-      return response.withDuration(watch.elapsed);
+      return response.finish(duration: watch.elapsed, requestUri: uri);
     } on OmniNetworkException catch (e) {
       if (e is CancelledFailure && signal.isCancelled) {
         final reason = await signal.whenCancelled;

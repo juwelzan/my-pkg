@@ -1,3 +1,5 @@
+import 'omni_response.dart';
+
 /// Base class of every error thrown by OmniNetwork.
 sealed class OmniNetworkException implements Exception {
   const OmniNetworkException(this.message, {this.uri, this.cause});
@@ -47,6 +49,30 @@ final class ClosedFailure extends OmniNetworkException {
 final class RequestFailure extends OmniNetworkException {
   /// Creates a request-building failure.
   const RequestFailure(super.message, {super.uri, super.cause});
+}
+
+/// The server answered with a non-2xx status (typed calls only; `sendRaw`
+/// returns every status).
+final class HttpFailure extends OmniNetworkException {
+  /// Creates an HTTP status failure for [response].
+  HttpFailure(this.response)
+    : super('HTTP ${response.statusCode}', uri: response.requestUri);
+
+  /// The full response, e.g. to read an error body via `response.json`.
+  /// Not included in [toString], so it is never logged by accident.
+  final OmniRawResponse response;
+
+  /// HTTP status code.
+  int get statusCode => response.statusCode;
+}
+
+/// The body could not be parsed or decoded into the requested type.
+final class DecodeFailure extends OmniNetworkException {
+  /// Creates a decoding failure.
+  const DecodeFailure(super.message, {super.uri, super.cause, this.stackTrace});
+
+  /// Where the decoder threw, when the failure came from a decoder.
+  final StackTrace? stackTrace;
 }
 
 /// Removes user info, query and fragment so errors never leak secrets.
