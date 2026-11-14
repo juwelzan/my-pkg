@@ -20,6 +20,8 @@ export 'src/log/network_log.dart';
 export 'src/log/redactor.dart';
 export 'src/paging/omni_pager.dart';
 export 'src/paging/pagination_strategy.dart';
+export 'src/queue/offline_queue.dart';
+export 'src/queue/queued_request.dart' hide unpersistedHeaders;
 export 'src/resilience/circuit_breaker.dart';
 export 'src/resilience/retry_policy.dart';
 export 'src/state/request_controller.dart';

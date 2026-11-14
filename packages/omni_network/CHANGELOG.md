@@ -90,3 +90,15 @@
   load, `refresh` restarting it, superseded loads never emit, `close`
   cancels the request). `api.watch<T>()` / `api.watchList<T>()`.
   Plain Dart; Flutter/Bloc bindings come in their own packages.
+- Step 10: `OfflineQueue` — nothing is queued implicitly; only `enqueue`
+  and `sendOrQueue` (queues only on connection error/timeout; any server
+  response, even 5xx, is returned). GET/HEAD and multipart refused;
+  PUT/PATCH/DELETE need `allowDestructive: true`; every item carries an
+  `Idempotency-Key` (generated or kept) that is reused on every replay;
+  `Authorization`/`Cookie` are never stored (auth adds a fresh token on
+  replay). `flush` replays FIFO one at a time, stops at the first temporary
+  failure (order kept), removes 4xx as `rejected`, dead-letters after
+  `maxAttempts`; concurrent flushes share one run; replays bypass client
+  retries. `events` stream, `discard`, `attach(Stream<bool>)` for
+  connectivity, id-based dedupe. `QueueStore` interface + `MemoryQueueStore`;
+  `QueuedRequest.toJson/fromJson` for persistent stores.
