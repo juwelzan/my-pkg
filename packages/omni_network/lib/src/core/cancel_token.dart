@@ -32,6 +32,15 @@ final class OmniCancelToken {
     _listeners.clear();
   }
 
+  /// A token that is cancelled when this one is (but can also be
+  /// cancelled on its own), e.g. one per screen under an app-wide token.
+  OmniCancelToken child() {
+    final c = OmniCancelToken();
+    final detach = attach(c.cancel);
+    c.attach(detach);
+    return c;
+  }
+
   /// Registers [onCancel]; returns a function that unregisters it. Internal.
   void Function() attach(void Function() onCancel) {
     if (_cancelled) {

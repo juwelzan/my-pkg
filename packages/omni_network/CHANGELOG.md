@@ -33,3 +33,12 @@
   refresh callback skip auth automatically; refresh failure/throw/timeout →
   callback once and `AuthFailure` for every waiter; later 401s for the same
   stale token fail without refreshing again.
+- Step 5: `OmniCancelToken` (`cancelToken:` on every call; shared tokens,
+  no listener leaks). `upload<T>` with `MultipartBody`/`UploadFile`
+  (bytes or re-openable stream, exact `content-length`, send progress,
+  replayable after token refresh). `downloadBytes` and `downloadToFile`
+  (IO only; `.part` file renamed on success, `resume:` via `Range`/206,
+  restart on 200) with receive progress. Transfers have no overall deadline
+  by default but fail after `idleTimeout` without progress.
+- `Transport.sendStreamed` + `StreamedResponse` (Dio and Mock implement it).
+- Logs summarise streamed/multipart bodies by size only.

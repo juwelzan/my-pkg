@@ -1,5 +1,6 @@
 import 'package:meta/meta.dart';
 
+import '../resilience/retry_policy.dart';
 import 'cancel_token.dart';
 
 /// HTTP methods supported by [OmniRequest].
@@ -45,6 +46,7 @@ final class OmniRequest {
     this.timeout,
     this.skipAuth = false,
     this.cancelToken,
+    this.retry,
   });
 
   /// GET request.
@@ -55,6 +57,7 @@ final class OmniRequest {
     Duration? timeout,
     bool skipAuth = false,
     OmniCancelToken? cancelToken,
+    RetryPolicy? retry,
   }) : this(
          HttpMethod.get,
          path,
@@ -63,6 +66,7 @@ final class OmniRequest {
          timeout: timeout,
          skipAuth: skipAuth,
          cancelToken: cancelToken,
+         retry: retry,
        );
 
   /// POST request.
@@ -74,6 +78,7 @@ final class OmniRequest {
     Duration? timeout,
     bool skipAuth = false,
     OmniCancelToken? cancelToken,
+    RetryPolicy? retry,
   }) : this(
          HttpMethod.post,
          path,
@@ -83,6 +88,7 @@ final class OmniRequest {
          timeout: timeout,
          skipAuth: skipAuth,
          cancelToken: cancelToken,
+         retry: retry,
        );
 
   /// PUT request.
@@ -94,6 +100,7 @@ final class OmniRequest {
     Duration? timeout,
     bool skipAuth = false,
     OmniCancelToken? cancelToken,
+    RetryPolicy? retry,
   }) : this(
          HttpMethod.put,
          path,
@@ -103,6 +110,7 @@ final class OmniRequest {
          timeout: timeout,
          skipAuth: skipAuth,
          cancelToken: cancelToken,
+         retry: retry,
        );
 
   /// PATCH request.
@@ -114,6 +122,7 @@ final class OmniRequest {
     Duration? timeout,
     bool skipAuth = false,
     OmniCancelToken? cancelToken,
+    RetryPolicy? retry,
   }) : this(
          HttpMethod.patch,
          path,
@@ -123,6 +132,7 @@ final class OmniRequest {
          timeout: timeout,
          skipAuth: skipAuth,
          cancelToken: cancelToken,
+         retry: retry,
        );
 
   /// DELETE request.
@@ -134,6 +144,7 @@ final class OmniRequest {
     Duration? timeout,
     bool skipAuth = false,
     OmniCancelToken? cancelToken,
+    RetryPolicy? retry,
   }) : this(
          HttpMethod.delete,
          path,
@@ -143,6 +154,7 @@ final class OmniRequest {
          timeout: timeout,
          skipAuth: skipAuth,
          cancelToken: cancelToken,
+         retry: retry,
        );
 
   /// HEAD request.
@@ -153,6 +165,7 @@ final class OmniRequest {
     Duration? timeout,
     bool skipAuth = false,
     OmniCancelToken? cancelToken,
+    RetryPolicy? retry,
   }) : this(
          HttpMethod.head,
          path,
@@ -161,6 +174,7 @@ final class OmniRequest {
          timeout: timeout,
          skipAuth: skipAuth,
          cancelToken: cancelToken,
+         retry: retry,
        );
 
   /// HTTP method.
@@ -190,6 +204,10 @@ final class OmniRequest {
   /// Cancels this request when cancelled, see [OmniCancelToken].
   final OmniCancelToken? cancelToken;
 
+  /// Retry policy for this request; overrides the client's. Use
+  /// [RetryPolicy.none] to disable retries for one call.
+  final RetryPolicy? retry;
+
   /// Copy with the given fields replaced.
   OmniRequest copyWith({
     HttpMethod? method,
@@ -200,6 +218,7 @@ final class OmniRequest {
     Duration? timeout,
     bool? skipAuth,
     OmniCancelToken? cancelToken,
+    RetryPolicy? retry,
   }) => OmniRequest(
     method ?? this.method,
     path ?? this.path,
@@ -208,6 +227,8 @@ final class OmniRequest {
     body: identical(body, _unset) ? this.body : body,
     timeout: timeout ?? this.timeout,
     skipAuth: skipAuth ?? this.skipAuth,
+    cancelToken: cancelToken ?? this.cancelToken,
+    retry: retry ?? this.retry,
   );
 
   /// Copy with header [name] set to [value] (replacing any existing header

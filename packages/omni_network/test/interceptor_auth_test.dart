@@ -290,8 +290,10 @@ void main() {
     test('no token => no header; 401 then tries refresh once', () async {
       final auth = BearerAuth(token: () => null, refresh: () => null);
       client(auth);
-      await expectLater(api.sendRaw(const OmniRequest.get('/x')),
-          throwsA(isA<AuthFailure>()));
+      await expectLater(
+        api.sendRaw(const OmniRequest.get('/x')),
+        throwsA(isA<AuthFailure>()),
+      );
       expect(server.seenTokens.single, isNull);
       expect(auth.refreshCount, 1);
     });

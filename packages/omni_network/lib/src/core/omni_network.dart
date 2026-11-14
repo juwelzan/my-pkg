@@ -6,6 +6,12 @@ import '../auth/bearer_auth.dart';
 import '../log/network_log.dart';
 import '../log/network_logger.dart';
 import '../log/redactor.dart';
+import '../resilience/circuit_breaker.dart';
+import '../resilience/retry_policy.dart';
+import '../transfer/download_target.dart';
+import '../transfer/file_target_stub.dart'
+    if (dart.library.io) '../transfer/file_target_io.dart';
+import '../transfer/multipart.dart';
 import '../transport/dio_transport.dart';
 import '../transport/transport.dart';
 import 'cancel_signal.dart';
@@ -42,6 +48,9 @@ final class OmniNetwork {
   ///   includes redacted, truncated bodies. Redaction cannot be disabled.
   /// * [interceptors]: see [OmniInterceptor].
   /// * [auth]: token injection and single-flight refresh, see [BearerAuth].
+  /// * [retry]: default [RetryPolicy] (none when `null`); overridable per
+  ///   request via `OmniRequest(retry:)`.
+  /// * [circuitBreaker]: fail fast for hosts that keep failing.
   OmniNetwork({
     String? baseUrl,
     Map<String, String> headers = const {},
@@ -54,6 +63,8 @@ final class OmniNetwork {
     bool logBodies = true,
     List<OmniInterceptor> interceptors = const [],
     this.auth,
+    this.retry,
+    this.circuitBreaker,
   }) : interceptors = List.unmodifiable(interceptors),
        _logger = enableLogging
            ? NetworkLogger(
@@ -81,6 +92,14 @@ final class OmniNetwork {
 
   /// Token auth, or `null`.
   final BearerAuth? auth;
+
+  /// Default retry policy, or `null` for no retries.
+  final RetryPolicy? retry;
+
+  /// Circuit breaker, or `null`.
+  final CircuitBreaker? circuitBreaker;
+
+  int _cancelEpoch = 0;
 
   /// Whether requests are logged. See the constructor.
   final bool enableLogging;
@@ -152,8 +171,13 @@ final class OmniNetwork {
     OmniCancelToken? cancelToken,
     ResponseAdapter? adapter,
   }) async => (await send<T>(
-    OmniRequest.get(path, query: query, headers: headers, timeout: timeout,
-        cancelToken: cancelToken),
+    OmniRequest.get(
+      path,
+      query: query,
+      headers: headers,
+      timeout: timeout,
+      cancelToken: cancelToken,
+    ),
     decoder: decoder,
     adapter: adapter,
   )).data;
@@ -168,8 +192,13 @@ final class OmniNetwork {
     OmniCancelToken? cancelToken,
     ResponseAdapter? adapter,
   }) async => (await sendList<T>(
-    OmniRequest.get(path, query: query, headers: headers, timeout: timeout,
-        cancelToken: cancelToken),
+    OmniRequest.get(
+      path,
+      query: query,
+      headers: headers,
+      timeout: timeout,
+      cancelToken: cancelToken,
+    ),
     decoder: decoder,
     adapter: adapter,
   )).data;
@@ -270,8 +299,13 @@ final class OmniNetwork {
     Duration? timeout,
     OmniCancelToken? cancelToken,
   }) => _ok(
-    OmniRequest.head(path, query: query, headers: headers, timeout: timeout,
-        cancelToken: cancelToken),
+    OmniRequest.head(
+      path,
+      query: query,
+      headers: headers,
+      timeout: timeout,
+      cancelToken: cancelToken,
+    ),
   );
 
   Future<T> _body<T>(
@@ -298,6 +332,126 @@ final class OmniNetwork {
     adapter: adapter,
   )).data;
 
+  /// Uploads [files] and text [fields] as `multipart/form-data` and decodes
+  /// the 2xx response into `T` (see [send]).
+  ///
+  /// [onProgress] reports bytes handed to the transport. Transfers have no
+  /// overall deadline unless [timeout] is given; instead they fail with
+  /// [TimeoutFailure] when no progress happens for [idleTimeout] (default:
+  /// the client [timeout]). Cancel with [cancelToken].
+  Future<T> upload<T>(
+    String path, {
+    List<UploadFile> files = const [],
+    Map<String, String> fields = const {},
+    HttpMethod method = HttpMethod.post,
+    ProgressCallback? onProgress,
+    JsonDecoder<T>? decoder,
+    ResponseAdapter? adapter,
+    Map<String, Object?> query = const {},
+    Map<String, String> headers = const {},
+    Duration? timeout,
+    Duration? idleTimeout,
+    OmniCancelToken? cancelToken,
+  }) async {
+    final request = OmniRequest(
+      method,
+      path,
+      body: MultipartBody(fields: fields, files: files),
+      query: query,
+      headers: headers,
+      cancelToken: cancelToken,
+    );
+    final raw = await _pipeline(
+      request,
+      _Transfer(onSend: onProgress, overall: timeout, idle: idleTimeout),
+    );
+    if (!raw.isSuccess) throw HttpFailure(raw);
+    return decodeBody<T>(raw, decoder, adapter ?? responseAdapter);
+  }
+
+  /// Downloads [path] into memory. See [upload] for timeouts/cancel.
+  /// [onProgress] receives bytes received and `content-length` (if sent).
+  Future<Uint8List> downloadBytes(
+    String path, {
+    ProgressCallback? onProgress,
+    Map<String, Object?> query = const {},
+    Map<String, String> headers = const {},
+    Duration? timeout,
+    Duration? idleTimeout,
+    OmniCancelToken? cancelToken,
+  }) async {
+    final target = BytesTarget();
+    await _downloadTo(
+      target,
+      OmniRequest.get(
+        path,
+        query: query,
+        headers: headers,
+        cancelToken: cancelToken,
+      ),
+      onProgress,
+      timeout,
+      idleTimeout,
+    );
+    return target.bytes;
+  }
+
+  /// Whether [downloadToFile] works on this platform (`false` on Web).
+  static bool get supportsFileDownload => fileDownloadSupported;
+
+  /// Downloads [path] to [filePath] (IO platforms only; on Web throws
+  /// [UnsupportedError], use [downloadBytes]).
+  ///
+  /// Data is written to `<filePath>.part` and renamed on success. When the
+  /// download fails or is cancelled the `.part` file is kept; with
+  /// [resume] a later call continues it using an HTTP `Range` request if
+  /// the server answers `206`, or starts over if it answers `200`.
+  /// Returns the final response (status and headers; empty body).
+  Future<OmniRawResponse> downloadToFile(
+    String path,
+    String filePath, {
+    bool resume = false,
+    ProgressCallback? onProgress,
+    Map<String, Object?> query = const {},
+    Map<String, String> headers = const {},
+    Duration? timeout,
+    Duration? idleTimeout,
+    OmniCancelToken? cancelToken,
+  }) => _downloadTo(
+    FileTarget(filePath, resume: resume),
+    OmniRequest.get(
+      path,
+      query: query,
+      headers: headers,
+      cancelToken: cancelToken,
+    ),
+    onProgress,
+    timeout,
+    idleTimeout,
+  );
+
+  Future<OmniRawResponse> _downloadTo(
+    DownloadTarget target,
+    OmniRequest request,
+    ProgressCallback? onProgress,
+    Duration? timeout,
+    Duration? idleTimeout,
+  ) async {
+    final from = await target.existingLength();
+    final raw = await _pipeline(
+      from > 0 ? request.withHeader('Range', 'bytes=$from-') : request,
+      _Transfer(
+        target: target,
+        onReceive: onProgress,
+        overall: timeout,
+        idle: idleTimeout,
+        resumeFrom: from,
+      ),
+    );
+    if (!raw.isSuccess) throw HttpFailure(raw);
+    return raw;
+  }
+
   Future<OmniRawResponse> _ok(OmniRequest request) async {
     final raw = await sendRaw(request);
     if (!raw.isSuccess) throw HttpFailure(raw);
@@ -309,15 +463,22 @@ final class OmniNetwork {
   ///
   /// Throws an [OmniNetworkException]: [TimeoutFailure], [ConnectionFailure],
   /// [ClosedFailure] or [RequestFailure].
-  Future<OmniRawResponse> sendRaw(OmniRequest request) async {
+  Future<OmniRawResponse> sendRaw(OmniRequest request) =>
+      _pipeline(request, null);
+
+  Future<OmniRawResponse> _pipeline(OmniRequest request, _Transfer? t) async {
     if (_closed) throw const ClosedFailure();
+    if (request.cancelToken?.isCancelled ?? false) {
+      throw const CancelledFailure();
+    }
     var current = request;
+    final epoch = _cancelEpoch;
     try {
       for (final i in interceptors) {
         final r = current;
         current = await _guard(() => i.onRequest(r));
       }
-      var response = await _authorized(current);
+      var response = await _withRetry(current, t, epoch);
       for (final i in interceptors.reversed) {
         final res = response;
         final r = current;
@@ -336,21 +497,110 @@ final class OmniNetwork {
     }
   }
 
-  Future<OmniRawResponse> _authorized(OmniRequest request) async {
+  Future<OmniRawResponse> _withRetry(
+    OmniRequest request,
+    _Transfer? t,
+    int epoch,
+  ) async {
+    final policy = t == null ? request.retry ?? retry : null;
+    if (policy == null || !policy.allows(request)) {
+      return _guarded(request, t, epoch);
+    }
+    for (var attempt = 1; ; attempt++) {
+      final last = attempt >= policy.maxAttempts;
+      Duration? wait;
+      try {
+        final res = await _guarded(request, t, epoch);
+        if (last || !policy.statuses.contains(res.statusCode)) return res;
+        wait = policy.delayFor(attempt, res);
+        if (wait == null) return res;
+      } on OmniNetworkException catch (e) {
+        if (last || !policy.retriesError(e)) rethrow;
+        wait = policy.backoff(attempt);
+      }
+      await _sleep(wait, request);
+      _checkStillWanted(request, epoch);
+    }
+  }
+
+  Future<OmniRawResponse> _guarded(
+    OmniRequest request,
+    _Transfer? t,
+    int epoch,
+  ) async {
+    final breaker = circuitBreaker;
+    if (breaker == null) return _authorized(request, t, epoch);
+    final uri = _resolveUri(request);
+    final host = '${uri.host}:${uri.port}';
+    breaker.acquire(host, safeUri(uri));
+    try {
+      final res = await _authorized(request, t, epoch);
+      breaker.record(host, success: res.statusCode < 500);
+      return res;
+    } on OmniNetworkException catch (e) {
+      if (e is TimeoutFailure || e is ConnectionFailure) {
+        breaker.record(host, success: false);
+      } else {
+        breaker.release(host);
+      }
+      rethrow;
+    }
+  }
+
+  Future<void> _sleep(Duration delay, OmniRequest request) async {
+    final signal = CancelSignal();
+    final timer = Timer(delay, signal.cancel);
+    final detach = request.cancelToken?.attach(
+      () => signal.cancel(_Reason.user),
+    );
+    _pending.add(signal);
+    try {
+      final reason = await signal.whenCancelled;
+      if (reason == _Reason.closed) throw const ClosedFailure();
+      if (reason == _Reason.user) throw const CancelledFailure();
+    } finally {
+      timer.cancel();
+      detach?.call();
+      _pending.remove(signal);
+    }
+  }
+
+  /// Cancels every in-flight request (including ones waiting for a retry
+  /// or a token refresh) with [CancelledFailure]; the client stays usable.
+  void cancelAll() {
+    _cancelEpoch++;
+    for (final s in _pending.toList()) {
+      s.cancel(_Reason.user);
+    }
+  }
+
+  Future<OmniRawResponse> _authorized(
+    OmniRequest request,
+    _Transfer? t,
+    int epoch,
+  ) async {
     final auth = this.auth;
     if (auth == null ||
         request.skipAuth ||
         insideRefresh ||
         request.header(auth.headerName) != null) {
-      return _sendOnce(request);
+      return _sendOnce(request, t);
     }
     final used = await auth.current();
-    if (_closed) throw const ClosedFailure();
-    final first = await _sendOnce(auth.attach(request, used));
+    _checkStillWanted(request, epoch);
+    final first = await _sendOnce(auth.attach(request, used), t);
     if (!auth.isExpired(first)) return first;
     final fresh = await auth.recover(used, first);
+    _checkStillWanted(request, epoch);
+    return _sendOnce(auth.attach(request, fresh), t);
+  }
+
+  void _checkStillWanted(OmniRequest request, int epoch) {
     if (_closed) throw const ClosedFailure();
-    return _sendOnce(auth.attach(request, fresh));
+    if (epoch != _cancelEpoch) throw const CancelledFailure();
+    if (request.cancelToken?.isCancelled ?? false) {
+      throw const CancelledFailure();
+    }
   }
 
   static Future<T> _guard<T>(FutureOr<T> Function() run) async {
@@ -363,17 +613,17 @@ final class OmniNetwork {
     }
   }
 
-  Future<OmniRawResponse> _sendOnce(OmniRequest request) async {
+  Future<OmniRawResponse> _sendOnce(OmniRequest request, _Transfer? t) async {
     if (_closed) throw const ClosedFailure();
     final log = _logger;
-    if (log == null) return _transmit(resolve(request), request);
+    if (log == null) return _transmit(resolve(request), request, t);
     final id = ++_logSeq;
     final watch = Stopwatch()..start();
     TransportRequest? resolved;
     try {
       resolved = resolve(request);
       log.request(id, resolved);
-      final response = await _transmit(resolved, request);
+      final response = await _transmit(resolved, request, t);
       log.response(id, resolved, response);
       return response;
     } on OmniNetworkException catch (e) {
@@ -385,16 +635,50 @@ final class OmniNetwork {
   Future<OmniRawResponse> _transmit(
     TransportRequest resolved,
     OmniRequest request,
+    _Transfer? t,
   ) async {
     final uri = safeUri(resolved.uri);
     final signal = CancelSignal();
-    final limit = request.timeout ?? timeout;
-    final timer = Timer(limit, () => signal.cancel(_Reason.timeout));
+    final limit = t == null ? request.timeout ?? timeout : t.overall;
+    final timer = limit == null
+        ? null
+        : Timer(limit, () => signal.cancel(_Reason.timeout));
+    Timer? idle;
+    final idleLimit = t?.idle ?? timeout;
+    void kick() {
+      if (t == null || signal.isCancelled) return;
+      idle?.cancel();
+      idle = Timer(idleLimit, () => signal.cancel(_Reason.idle));
+    }
+
+    final detach = request.cancelToken?.attach(
+      () => signal.cancel(_Reason.user),
+    );
     _pending.add(signal);
+    var outgoing = resolved;
+    final open = resolved.bodyStream;
+    if (t != null && open != null) {
+      final total = resolved.contentLength;
+      outgoing = resolved.withBodyStream(() {
+        var sent = 0;
+        return open().map((chunk) {
+          sent += chunk.length;
+          kick();
+          t.onSend?.call(sent, total);
+          return chunk;
+        });
+      });
+    }
     final watch = Stopwatch()..start();
     try {
+      kick();
+      final target = t?.target;
       final response = await Future.any<OmniRawResponse>([
-        Future.sync(() => _transport.send(resolved, signal)),
+        Future.sync(
+          () => target == null
+              ? _transport.send(outgoing, signal)
+              : _download(outgoing, signal, t!, target, kick, uri),
+        ),
         signal.whenCancelled.then<OmniRawResponse>(
           (_) => throw CancelledFailure(uri: uri),
         ),
@@ -403,16 +687,99 @@ final class OmniNetwork {
     } on OmniNetworkException catch (e) {
       if (e is CancelledFailure && signal.isCancelled) {
         final reason = await signal.whenCancelled;
-        if (reason == _Reason.timeout) throw TimeoutFailure(limit, uri: uri);
+        if (reason == _Reason.timeout) throw TimeoutFailure(limit!, uri: uri);
+        if (reason == _Reason.idle) throw TimeoutFailure(idleLimit, uri: uri);
         if (reason == _Reason.closed) throw ClosedFailure(uri: uri);
+        throw CancelledFailure(uri: uri);
       }
       rethrow;
     } on Exception catch (e) {
       throw ConnectionFailure('Transport error', uri: uri, cause: e);
     } finally {
-      timer.cancel();
+      timer?.cancel();
+      idle?.cancel();
+      detach?.call();
       _pending.remove(signal);
     }
+  }
+
+  Future<OmniRawResponse> _download(
+    TransportRequest request,
+    CancelSignal signal,
+    _Transfer t,
+    DownloadTarget target,
+    void Function() kick,
+    Uri uri,
+  ) async {
+    final res = await _transport.sendStreamed(request, signal);
+    kick();
+    final ok = res.statusCode >= 200 && res.statusCode < 300;
+    if (!ok) {
+      // Error bodies are small: buffer them for HttpFailure/auth handling.
+      final b = BytesBuilder(copy: false);
+      await for (final chunk in res.body) {
+        b.add(chunk);
+      }
+      return OmniRawResponse(
+        statusCode: res.statusCode,
+        headers: res.headers,
+        bodyBytes: b.takeBytes(),
+      );
+    }
+    final append = res.statusCode == 206 && t.resumeFrom > 0;
+    var received = append ? t.resumeFrom : 0;
+    final length = res.contentLength;
+    final total = length == null ? null : length + received;
+    await target.begin(append: append);
+    final done = Completer<void>();
+    void fail(Object e) {
+      if (done.isCompleted) return;
+      done.completeError(
+        e is OmniNetworkException
+            ? e
+            : ConnectionFailure('Download failed', uri: uri, cause: e),
+      );
+    }
+
+    late final StreamSubscription<List<int>> sub;
+    sub = res.body.listen(
+      (chunk) async {
+        sub.pause();
+        try {
+          await target.add(chunk);
+          received += chunk.length;
+          kick();
+          t.onReceive?.call(received, total);
+        } catch (e) {
+          await sub.cancel();
+          fail(e);
+        } finally {
+          sub.resume();
+        }
+      },
+      onError: (Object e) {
+        sub.cancel();
+        fail(e);
+      },
+      onDone: () {
+        if (!done.isCompleted) done.complete();
+      },
+      cancelOnError: true,
+    );
+    unawaited(
+      signal.whenCancelled.then((_) {
+        sub.cancel();
+        fail(CancelledFailure(uri: uri));
+      }),
+    );
+    try {
+      await done.future;
+      await target.commit();
+    } catch (_) {
+      await target.abort();
+      rethrow;
+    }
+    return OmniRawResponse(statusCode: res.statusCode, headers: res.headers);
   }
 
   /// Builds the [TransportRequest] for [request] without sending it.
@@ -420,12 +787,30 @@ final class OmniNetwork {
   TransportRequest resolve(OmniRequest request) {
     final uri = _resolveUri(request);
     final merged = {...headers, ..._lower(request.headers)};
-    final body = _encodeBody(request, merged, uri);
+    final body = request.body;
+    if (body is MultipartBody) {
+      if (request.method == HttpMethod.get ||
+          request.method == HttpMethod.head) {
+        throw RequestFailure(
+          '${request.method.verb} requests cannot have a body',
+          uri: safeUri(uri),
+        );
+      }
+      merged['content-type'] = body.contentType;
+      return TransportRequest(
+        method: request.method,
+        uri: uri,
+        headers: merged,
+        bodyStream: body.open,
+        contentLength: body.length,
+      );
+    }
+    final encoded = _encodeBody(request, merged, uri);
     return TransportRequest(
       method: request.method,
       uri: uri,
       headers: merged,
-      body: body,
+      body: encoded,
     );
   }
 
@@ -554,4 +939,22 @@ final class OmniNetwork {
   };
 }
 
-enum _Reason { timeout, closed }
+enum _Reason { timeout, idle, closed, user }
+
+final class _Transfer {
+  _Transfer({
+    this.onSend,
+    this.onReceive,
+    this.target,
+    this.overall,
+    this.idle,
+    this.resumeFrom = 0,
+  });
+
+  final ProgressCallback? onSend;
+  final ProgressCallback? onReceive;
+  final DownloadTarget? target;
+  final Duration? overall;
+  final Duration? idle;
+  final int resumeFrom;
+}

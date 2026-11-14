@@ -94,6 +94,7 @@ final class MockTransport implements Transport {
     final controller = StreamController<List<int>>();
     _inFlight++;
     var done = false;
+    var stopped = false;
     void finish() {
       if (done) return;
       done = true;
@@ -103,9 +104,13 @@ final class MockTransport implements Transport {
     controller.onListen = () async {
       try {
         for (var i = 0; i < bytes.length; i += chunkSize) {
-          if (chunkDelay > Duration.zero) await Future<void>.delayed(chunkDelay);
-          if (cancel.isCancelled || controller.isClosed) break;
-          final end = i + chunkSize < bytes.length ? i + chunkSize : bytes.length;
+          if (chunkDelay > Duration.zero) {
+            await Future<void>.delayed(chunkDelay);
+          }
+          if (cancel.isCancelled || stopped) break;
+          final end = i + chunkSize < bytes.length
+              ? i + chunkSize
+              : bytes.length;
           controller.add(Uint8List.sublistView(bytes, i, end));
         }
       } finally {
@@ -113,7 +118,10 @@ final class MockTransport implements Transport {
         if (!controller.isClosed) await controller.close();
       }
     };
-    controller.onCancel = finish;
+    controller.onCancel = () {
+      stopped = true;
+      finish();
+    };
     return StreamedResponse(
       statusCode: res.statusCode,
       headers: res.headers,

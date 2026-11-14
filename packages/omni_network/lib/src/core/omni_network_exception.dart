@@ -85,6 +85,16 @@ final class AuthFailure extends OmniNetworkException {
   final OmniRawResponse? response;
 }
 
+/// The circuit breaker for [host] is open: the request was not sent.
+final class CircuitOpenFailure extends OmniNetworkException {
+  /// Creates an open-circuit failure.
+  CircuitOpenFailure(this.host, {super.uri})
+    : super('Circuit open for $host; request not sent');
+
+  /// `host:port` whose circuit is open.
+  final String host;
+}
+
 /// Removes user info, query and fragment so errors never leak secrets.
 Uri safeUri(Uri uri) => Uri(
   scheme: uri.scheme,

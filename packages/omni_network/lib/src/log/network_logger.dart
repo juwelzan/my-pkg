@@ -24,9 +24,12 @@ final class NetworkLogger {
   void request(int id, TransportRequest r) {
     final url = redactor.uri(r.uri);
     final headers = redactor.headers(r.headers);
-    final body = logBodies
-        ? redactor.body(r.body, r.headers['content-type'])
-        : null;
+    final body = !logBodies
+        ? null
+        : r.bodyStream != null
+        ? '<${r.contentLength ?? '?'} bytes, '
+              '${r.headers['content-type'] ?? 'unknown type'}, not shown>'
+        : redactor.body(r.body, r.headers['content-type']);
     _emit(
       NetworkLogRecord(
         kind: NetworkLogKind.request,
