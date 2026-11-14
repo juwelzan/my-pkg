@@ -102,3 +102,28 @@
   retries. `events` stream, `discard`, `attach(Stream<bool>)` for
   connectivity, id-based dedupe. `QueueStore` interface + `MemoryQueueStore`;
   `QueuedRequest.toJson/fromJson` for persistent stores.
+- Step 11: `Endpoint<T>` (`Endpoint.get/getList/post/put/patch/delete`,
+  `{param}` path templates URL-encoded, missing/unknown params rejected,
+  default query/headers/cache/retry, name/description/tags) with
+  `api.call(endpoint, path:, query:, body:)` / `callResponse`.
+  `EndpointRegistry` (by name or `METHOD path`, tags, `match` concrete
+  paths, duplicates rejected).
+- Fluent `api.request(path, method:)` → `OmniRequestBuilder` (`query`,
+  `header`, `json`, `form`, `text`, `bytes`, `timeout`, `cancelToken`,
+  `retry`, `cache`, `skipAuth`, `send`/`sendList`/`sendRaw`, `build`).
+- `api.toCurl(request, redact: true)`: secrets masked by default, safe shell
+  quoting, binary/multipart bodies never inlined. `parseCurl(command)` →
+  `CurlImport(request, warnings)` for browser "Copy as cURL" commands
+  (quotes, continuations, -X/-H/-d*/--json/-u/-G/-I/--url…; unsupported
+  options reported, never silently dropped). Export→import round-trips.
+- `OmniNetwork.redactor` is now a public field (used by logs and cURL).
+- Step 12: `OmniMock`, a programmable fake backend usable as `transport:`:
+  `get/post/put/patch/delete/on/any` routes with `{param}` templates
+  (later routes win), `endpoint(Endpoint, …)`, `basePath`, `MockRequest`
+  (`pathParams`, `query`, `headers`, `json`, `text`), `MockResponse`
+  (`json`, `text`, `bytes`, `status`, `error`, `offline`, `hang`, per
+  response `delay`), `OmniMock.sequence([...])`, named `scenario`s with
+  `use(name)`, global `latency`, `failNext(n, error)`, seeded
+  `failureRate`, `calls`/`callsTo`/`unmatched`/`resetCalls`. Strict by
+  default: an unmatched request fails with a `RequestFailure` naming it.
+  Downloads and uploads work through it.

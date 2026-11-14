@@ -4,6 +4,9 @@ import 'dart:typed_data';
 
 import '../auth/bearer_auth.dart';
 import '../cache/omni_cache.dart';
+import '../builder/request_builder.dart';
+import '../curl/curl.dart';
+import '../endpoint/endpoint.dart';
 import '../log/network_log.dart';
 import '../log/network_logger.dart';
 import '../log/redactor.dart';
@@ -66,7 +69,7 @@ final class OmniNetwork {
     this.responseAdapter = const PlainResponseAdapter(),
     this.enableLogging = false,
     LogSink? logSink,
-    Redactor redactor = const Redactor(),
+    this.redactor = const Redactor(),
     bool logBodies = true,
     List<OmniInterceptor> interceptors = const [],
     this.auth,
@@ -117,6 +120,9 @@ final class OmniNetwork {
   final bool deduplicate;
 
   final Map<String, _Shared> _inflight = {};
+
+  /// Redaction rules for logs and [toCurl].
+  final Redactor redactor;
 
   /// Whether requests are logged. See the constructor.
   final bool enableLogging;
@@ -348,6 +354,64 @@ final class OmniNetwork {
     decoder: decoder,
     adapter: adapter,
   )).data;
+
+  /// A fluent [OmniRequestBuilder] for [path] (GET unless [method]).
+  OmniRequestBuilder request(
+    String path, {
+    HttpMethod method = HttpMethod.get,
+  }) => OmniRequestBuilder(this, method, path);
+
+  /// [request] as a `curl` command with this client's base URL and default
+  /// headers. Secrets are redacted unless [redact] is `false`. Auth tokens
+  /// added by [auth] are not included (they are added at send time).
+  String toCurl(OmniRequest request, {bool redact = true}) =>
+      curlFor(resolve(request), redact: redact, redactor: redactor);
+
+  /// Calls [endpoint] and returns its decoded result.
+  ///
+  /// ```dart
+  /// final user = await api.call(UserApi.byId, path: {'id': 10});
+  /// ```
+  Future<T> call<T>(
+    Endpoint<T> endpoint, {
+    Map<String, Object?> path = const {},
+    Map<String, Object?> query = const {},
+    Map<String, String> headers = const {},
+    Object? body,
+    Duration? timeout,
+    OmniCancelToken? cancelToken,
+  }) async => (await callResponse(
+    endpoint,
+    path: path,
+    query: query,
+    headers: headers,
+    body: body,
+    timeout: timeout,
+    cancelToken: cancelToken,
+  )).data;
+
+  /// Like [call] but returns the full [OmniResponse].
+  Future<OmniResponse<T>> callResponse<T>(
+    Endpoint<T> endpoint, {
+    Map<String, Object?> path = const {},
+    Map<String, Object?> query = const {},
+    Map<String, String> headers = const {},
+    Object? body,
+    Duration? timeout,
+    OmniCancelToken? cancelToken,
+  }) async {
+    final raw = await _ok(
+      endpoint.request(
+        path: path,
+        query: query,
+        headers: headers,
+        body: body,
+        timeout: timeout,
+        cancelToken: cancelToken,
+      ),
+    );
+    return OmniResponse(endpoint.decode(raw, responseAdapter), raw);
+  }
 
   /// A [RequestController] that GETs [path] decoded into `T` (see [send]).
   /// Starts loading at once unless [autoLoad] is `false`.
