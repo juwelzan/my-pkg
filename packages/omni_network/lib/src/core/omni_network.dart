@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import '../auth/bearer_auth.dart';
+import '../auth/omni_auth.dart';
 import '../cache/omni_cache.dart';
 import '../curl/curl.dart';
 import '../endpoint/endpoint.dart';
@@ -56,7 +57,13 @@ final class OmniNetwork {
   ///   [PrintLogSink]) after [redactor] masked secrets; [logBodies]
   ///   includes redacted, truncated bodies. Redaction cannot be disabled.
   /// * [interceptors]: see [OmniInterceptor].
-  /// * [auth]: token injection and single-flight refresh, see [BearerAuth].
+  /// * [auth]: token management, usually an [OmniAuth] (login/logout,
+  ///   refresh on 401 or before expiry, storage). Without [auth] and
+  ///   [token] the client still has a plain [OmniAuth], so
+  ///   `api.auth.login(...)` works out of the box (no refresh).
+  /// * [token]: shortcut for an existing token: returns the current access
+  ///   token (or `null`). No refresh; a 401 is an `HttpFailure`.
+  ///   Pass either [token] or [auth].
   /// * [retry]: default [RetryPolicy] (none when `null`); overridable per
   ///   request via `OmniRequest(retry:)`.
   /// * [circuitBreaker]: fail fast for hosts that keep failing.
@@ -74,12 +81,19 @@ final class OmniNetwork {
     this.redactor = const Redactor(),
     bool logBodies = true,
     List<OmniInterceptor> interceptors = const [],
-    this.auth,
+    AuthProvider? auth,
+    FutureOr<String?> Function()? token,
     this.retry,
     this.circuitBreaker,
     this.cache,
     this.deduplicate = true,
-  }) : interceptors = List.unmodifiable(interceptors),
+  }) : assert(
+         auth == null || token == null,
+         'Pass either token: or auth:, not both',
+       ),
+       _provider =
+           auth ?? (token == null ? OmniAuth() : BearerAuth(token: token)),
+       interceptors = List.unmodifiable(interceptors),
        _logger = enableLogging
            ? NetworkLogger(
                logSink ?? const PrintLogSink(),
@@ -90,7 +104,11 @@ final class OmniNetwork {
        baseUri = baseUrl == null ? null : _parseBase(baseUrl),
        headers = Map.unmodifiable(_lower(headers)),
        _transport = transport ?? DioTransport(),
-       _ownsTransport = transport == null;
+       _ownsTransport = transport == null {
+    // Bind the auth provider now so misuse (one OmniAuth for two clients)
+    // fails at construction, not on the first request.
+    _bearer;
+  }
 
   /// Parsed base URL (always ending in `/`), or `null`.
   final Uri? baseUri;
@@ -104,8 +122,20 @@ final class OmniNetwork {
   /// Interceptors, in `onRequest` order.
   final List<OmniInterceptor> interceptors;
 
-  /// Token auth, or `null`.
-  final BearerAuth? auth;
+  final AuthProvider _provider;
+  late final BearerAuth _bearer = _provider.bearerFor(this);
+
+  /// The token manager: `api.auth.login(...)`, `logout()`, `isLoggedIn`,
+  /// `changes`. Throws [StateError] when the client was created with
+  /// `token:` or a custom provider such as `BearerAuth`.
+  OmniAuth get auth {
+    final p = _provider;
+    if (p is OmniAuth) return p;
+    throw StateError(
+      'This client uses ${p.runtimeType}; api.auth is only available with '
+      'OmniAuth (the default)',
+    );
+  }
 
   /// Default retry policy, or `null` for no retries.
   final RetryPolicy? retry;
@@ -958,9 +988,8 @@ final class OmniNetwork {
     _Transfer? t,
     int epoch,
   ) async {
-    final auth = this.auth;
-    if (auth == null ||
-        request.skipAuth ||
+    final auth = _bearer;
+    if (request.skipAuth ||
         insideRefresh ||
         request.header(auth.headerName) != null) {
       return _sendOnce(request, t);
@@ -968,7 +997,7 @@ final class OmniNetwork {
     final used = await auth.current();
     _checkStillWanted(request, epoch);
     final first = await _sendOnce(auth.attach(request, used), t);
-    if (!auth.isExpired(first)) return first;
+    if (auth.refresh == null || !auth.isExpired(first)) return first;
     final fresh = await auth.recover(used, first);
     _checkStillWanted(request, epoch);
     return _sendOnce(auth.attach(request, fresh), t);
@@ -1253,6 +1282,8 @@ final class OmniNetwork {
 
   Future<void> _close() async {
     _closed = true;
+    final provider = _provider;
+    if (provider is OmniAuth) await provider.close();
     for (final s in _pending.toList()) {
       s.cancel(_Reason.closed);
     }

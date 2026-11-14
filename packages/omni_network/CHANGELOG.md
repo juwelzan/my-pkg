@@ -148,3 +148,18 @@
   `OmniRequestBuilder`) is removed; `send`, `sendList`, `sendRaw`,
   `openStream`, `resolve` and `toCurl` moved to the `OmniNetworkAdvanced`
   extension (`advanced.dart`).
+- S3 (simplification): `OmniNetwork(token: () => …)` shortcut (bearer
+  header, no refresh; 401 stays an `HttpFailure`). `BearerAuth.refresh` is
+  optional. Every `OmniNetworkException` has `statusCode` (null without a
+  response), `isOffline`, `isTimeout`, `isCancelled`, `isUnauthorized`.
+- S4 (simplification): `OmniAuth` token manager — `api.auth.login(Tokens)`,
+  `logout()` (clears tokens and cache, `onLogout` once), `isLoggedIn`,
+  `tokens`, `changes` (`AuthState`), `restore()`. Refresh on 401 and
+  shortly before expiry (`refreshBefore`), single flight, keeps the refresh
+  token when not rotated, signs out on refresh failure. `TokenStorage`
+  (+ `MemoryTokenStorage`, default) in `advanced.dart`; `Tokens` with
+  `toJson/fromJson` and a `toString` that never prints secrets. Every client
+  has an `OmniAuth` by default, so `api.auth.login(...)` works without
+  configuration. **Breaking:** `auth:` takes an `AuthProvider` (`OmniAuth` or
+  `BearerAuth`); `BearerAuth` moved to `advanced.dart`. One `OmniAuth` per
+  client (checked at construction).

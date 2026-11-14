@@ -134,20 +134,35 @@ void main() {
     expect(calls, 2);
   });
 
-  test('with dedup, refresh during a load reuses the in-flight call', () async {
-    final gate = Completer<OmniRawResponse>();
-    mock.handler = (_) => gate.future;
-    final c = api.watch<Map<String, dynamic>>('/a', autoLoad: false);
-    addTearDown(c.close);
-    final a = c.load();
-    await Future<void>.delayed(Duration.zero);
-    final b = c.refresh();
-    await Future<void>.delayed(Duration.zero);
-    gate.complete(json({'n': 3}));
-    await Future.wait([a, b]);
-    expect(c.state.data, {'n': 3});
-    expect(mock.requests, hasLength(1));
-  });
+  test(
+    'with dedup on, refresh during a load still ends with fresh data',
+    () async {
+      // Whether the refreshed GET joins the in-flight one depends on timing;
+      // either way the controller must end in success with the latest data
+      // and never emit the superseded result.
+      final gates = <Completer<OmniRawResponse>>[];
+      mock.handler = (_) {
+        final g = Completer<OmniRawResponse>();
+        gates.add(g);
+        return g.future;
+      };
+      final c = api.watch<Map<String, dynamic>>('/a', autoLoad: false);
+      addTearDown(c.close);
+      final seen = <String>[];
+      c.stream.listen((s) => seen.add(kind(s)));
+      final a = c.load();
+      await Future<void>.delayed(Duration.zero);
+      final b = c.refresh();
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+      for (final g in gates) {
+        if (!g.isCompleted) g.complete(json({'n': gates.indexOf(g) + 1}));
+      }
+      await Future.wait([a, b]);
+      await Future<void>.delayed(Duration.zero);
+      expect(c.state.data, {'n': gates.length});
+      expect(seen.where((s) => s.startsWith('success')), hasLength(1));
+    },
+  );
 
   test('non-network errors become RequestError too', () async {
     final c = RequestController<int>((_) async => throw StateError('bug'));

@@ -106,6 +106,21 @@ Every failure is a subtype of the sealed `OmniNetworkException`:
 `AuthFailure`, `CircuitOpenFailure` and `RequestFailure`. Error messages
 never contain bodies, headers, query strings or URL user info.
 
+Quick checks on any failure, no need to know the hierarchy:
+
+```dart
+try {
+  await api.get<User>('/me', decoder: User.fromJson);
+} on OmniNetworkException catch (e) {
+  if (e.isOffline) showOfflineBanner();          // connection error or timeout
+  else if (e.isUnauthorized) goToLogin();        // 401 or refresh failed
+  else if (e.statusCode == 404) showNotFound();  // null when no response
+  else showError(e.message);                     // safe: no secrets
+}
+```
+
+`isTimeout` and `isCancelled` are also available. Or skip try/catch:
+
 ```dart
 switch (await api.get<User>('/me', decoder: User.fromJson).asResult()) {
   case Ok(:final value): show(value);
@@ -145,39 +160,72 @@ reporter), pass `logSink:`.
 
 ## Auth and interceptors
 
+Every client has a built-in token manager, `api.auth`:
+
 ```dart
-late final OmniNetwork api;
-api = OmniNetwork(
+final api = OmniNetwork(
   baseUrl: url,
-  auth: BearerAuth(
-    token: () => store.accessToken,
-    refresh: () async {
-      // Requests made in here skip auth automatically.
+  auth: OmniAuth(
+    // Runs on a 401, or shortly before the token expires.
+    refresh: (tokens, api) async {
       final r = await api.post<Map<String, dynamic>>('/auth/refresh',
-          body: {'refresh_token': store.refreshToken});
-      return store.accessToken = r['access_token'] as String;
+          body: {'refresh_token': tokens.refresh});
+      return Tokens(access: r['access_token'], refresh: r['refresh_token'],
+          expiresIn: Duration(seconds: r['expires_in']));
     },
-    onRefreshFailed: session.logout,
+    onLogout: () => router.go('/login'),
   ),
-  interceptors: [AppVersionHeader()],
 );
 
+// After your login call:
+final r = await api.post<Map<String, dynamic>>('/auth/login',
+    body: {'user': u, 'password': p}, auth: false);
+await api.auth.login(Tokens(access: r['access_token'], refresh: r['refresh_token']));
+
+api.auth.isLoggedIn;      // true
+api.auth.changes;         // Stream<AuthState>, e.g. to redirect in the router
+await api.auth.logout();  // clears tokens and cache, calls onLogout
+```
+
+What the token manager does:
+
+- **Automatic header.** Every request gets `Authorization: Bearer …`. Pass
+  `auth: false` on a call to send it without a token.
+- **Refresh on 401.** Ten 401s at once still mean a single refresh, and each
+  request is replayed once with the new token.
+- **Refresh before expiry.** When `expiresIn`/`expiresAt` is known, the
+  token is refreshed shortly before it expires (`refreshBefore`, default
+  30 s), so the user never sees a 401.
+- **Refresh failure.** If `refresh` returns `null`, throws or times out, the
+  tokens are cleared, `onLogout` runs once, and the waiting calls fail with
+  `AuthFailure` (`e.isUnauthorized` is true).
+- **No refresh configured.** `OmniAuth()` without `refresh` (also the
+  default when you pass nothing) just stores and sends the token. A 401 is
+  then a normal `HttpFailure`.
+- **Storage.** Tokens are kept in memory. To keep users signed in across
+  restarts, pass `storage:` (a `TokenStorage` from `advanced.dart`); the
+  Flutter package provides secure storage. Tokens are restored from storage
+  on the first request.
+
+A token you already manage yourself:
+
+```dart
+final api = OmniNetwork(baseUrl: url, token: () => storage.token);
+```
+
+Interceptors add your own headers or checks:
+
+```dart
 final class AppVersionHeader extends OmniInterceptor {
   @override
   OmniRequest onRequest(OmniRequest r) => r.withHeader('X-App', '1.4.0');
 }
+
+OmniNetwork(baseUrl: url, interceptors: [AppVersionHeader()]);
 ```
 
-How token refresh behaves:
-
-- **Single flight.** If ten requests get a 401 at the same time, `refresh`
-  runs once and each request is replayed once with the new token.
-- **No stale tokens.** A request that starts while a refresh is running
-  waits for it.
-- **Failure.** If `refresh` returns `null`, throws or times out,
-  `onRefreshFailed` runs once and every waiting request fails with
-  `AuthFailure`.
-- **No loops.** A replayed request that gets 401 again is returned as is.
+For a fully custom setup, `BearerAuth` (from `advanced.dart`) is the
+low-level engine behind `OmniAuth`.
 
 ## Retry and circuit breaker
 

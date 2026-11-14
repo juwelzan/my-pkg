@@ -74,30 +74,36 @@ OmniMock fakeBackend() {
 
 Future<void> main() async {
   final backend = fakeBackend();
-  var accessToken = 'token-1-expired';
 
-  late final OmniNetwork api;
-  api = OmniNetwork(
+  final api = OmniNetwork(
     baseUrl: 'https://api.example.com/v1',
     transport: backend,
     enableLogging: false, // the one logging switch (secrets are redacted)
-    auth: BearerAuth(
-      token: () => accessToken,
-      refresh: () async {
-        // Requests made inside refresh skip auth automatically.
-        final r = await api.post<Map<String, dynamic>>('/auth/refresh');
-        return accessToken = r['access_token'] as String;
+    auth: OmniAuth(
+      // Called on a 401 (or shortly before the token expires).
+      // Requests made in here skip auth automatically.
+      refresh: (tokens, api) async {
+        final r = await api.post<Map<String, dynamic>>(
+          '/auth/refresh',
+          body: {'refresh_token': tokens.refresh},
+        );
+        return Tokens(access: r['access_token'] as String);
       },
-      onRefreshFailed: () => print('logged out'),
+      onLogout: () => print('logged out'),
     ),
     retry: const RetryPolicy(baseDelay: Duration(milliseconds: 50)),
     cache: OmniCache(),
   );
 
+  // After your login call: save the tokens once; every request uses them.
+  await api.auth.login(
+    const Tokens(access: 'token-1-expired', refresh: 'refresh-1'),
+  );
+
   // 1. Typed GET. The first try gets 401, the token is refreshed once,
   //    and the request is replayed.
   final user = await api.get<User>('/users/1', decoder: User.fromJson);
-  print('1. $user (token now $accessToken)');
+  print('1. $user (token refreshed: ${api.auth.tokens?.access == 'token-2'})');
 
   // 2. Endpoint registry + POST with a JSON body.
   final created = await api.call(UserApi.create, body: {'name': 'Fay'});

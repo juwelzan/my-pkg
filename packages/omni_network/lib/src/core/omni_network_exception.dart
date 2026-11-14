@@ -13,6 +13,23 @@ sealed class OmniNetworkException implements Exception {
   /// Underlying error, if any.
   final Object? cause;
 
+  /// HTTP status of the response, or `null` when there was no response
+  /// (offline, timeout, cancelled…).
+  int? get statusCode => null;
+
+  /// No connection to the server, or it did not answer in time.
+  bool get isOffline => this is ConnectionFailure || this is TimeoutFailure;
+
+  /// The request timed out.
+  bool get isTimeout => this is TimeoutFailure;
+
+  /// The request was cancelled or the client was closed.
+  bool get isCancelled => this is CancelledFailure || this is ClosedFailure;
+
+  /// Not signed in or the session expired (401, or the token refresh
+  /// failed).
+  bool get isUnauthorized => this is AuthFailure || statusCode == 401;
+
   @override
   String toString() => '$runtimeType: $message${uri == null ? '' : ' ($uri)'}';
 }
@@ -63,6 +80,7 @@ final class HttpFailure extends OmniNetworkException {
   final OmniRawResponse response;
 
   /// HTTP status code.
+  @override
   int get statusCode => response.statusCode;
 }
 
@@ -83,6 +101,9 @@ final class AuthFailure extends OmniNetworkException {
 
   /// The 401 (or other expired-token) response that triggered the refresh.
   final OmniRawResponse? response;
+
+  @override
+  int? get statusCode => response?.statusCode;
 }
 
 /// The circuit breaker for [host] is open: the request was not sent.

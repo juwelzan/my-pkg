@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import '../core/omni_network.dart';
 import '../core/omni_network_exception.dart';
 import '../core/omni_request.dart';
 import '../core/omni_response.dart';
@@ -9,6 +10,13 @@ final Object authSkipZoneKey = Object();
 
 /// Whether the current zone is inside a refresh callback. Internal.
 bool get insideRefresh => Zone.current[authSkipZoneKey] == true;
+
+/// Something that can authenticate an `OmniNetwork` client: `OmniAuth`
+/// (recommended) or [BearerAuth] (advanced).
+abstract interface class AuthProvider {
+  /// The token/refresh machinery used by [client]. Internal.
+  BearerAuth bearerFor(OmniNetwork client);
+}
 
 /// Adds a token to requests and refreshes it once when it expires.
 ///
@@ -42,23 +50,31 @@ bool get insideRefresh => Zone.current[authSkipZoneKey] == true;
 ///
 /// A request that already carries the auth header, or uses
 /// `OmniRequest(skipAuth: true)`, is sent untouched.
-final class BearerAuth {
+final class BearerAuth implements AuthProvider {
   /// Creates bearer-token auth.
   BearerAuth({
     required this.token,
-    required this.refresh,
+    this.refresh,
     this.onRefreshFailed,
     bool Function(OmniRawResponse response)? isExpired,
     this.scheme = 'Bearer',
     this.headerName = 'Authorization',
     this.refreshTimeout = const Duration(seconds: 30),
+    this.isExpiring,
   }) : isExpired = isExpired ?? _is401;
+
+  /// When it returns `true` before a request, the token is refreshed first
+  /// (single flight), e.g. because it expires within seconds.
+  final bool Function()? isExpiring;
 
   /// Reads the current access token (`null` = not signed in).
   final FutureOr<String?> Function() token;
 
   /// Obtains and stores a new access token; returns it, or `null` on failure.
-  final FutureOr<String?> Function() refresh;
+  ///
+  /// When `null`, the token is only attached: a 401 is returned as is
+  /// (as `HttpFailure` from typed calls) and nothing is refreshed.
+  final FutureOr<String?> Function()? refresh;
 
   /// Called once per failed refresh, e.g. to log out.
   final FutureOr<void> Function()? onRefreshFailed;
@@ -88,6 +104,9 @@ final class BearerAuth {
 
   static bool _is401(OmniRawResponse r) => r.statusCode == 401;
 
+  @override
+  BearerAuth bearerFor(OmniNetwork client) => this;
+
   /// [request] with the token header added. Internal.
   OmniRequest attach(OmniRequest request, String? token) =>
       token == null || token.isEmpty
@@ -100,7 +119,12 @@ final class BearerAuth {
   /// The token to use now, waiting for a running refresh first. Internal.
   Future<String?> current() async {
     final running = _inFlight;
-    if (running != null) await running;
+    if (running != null) {
+      await running;
+    } else if (refresh != null && (isExpiring?.call() ?? false)) {
+      final used = await token();
+      await (_inFlight ??= _run(used));
+    }
     return token();
   }
 
@@ -136,7 +160,7 @@ final class BearerAuth {
     _refreshCount++;
     try {
       final fresh = await runZoned(
-        () => Future.sync(refresh),
+        () => Future.sync(refresh!),
         zoneValues: {authSkipZoneKey: true},
       ).timeout(refreshTimeout);
       if (fresh != null && fresh.isNotEmpty) {

@@ -30,7 +30,8 @@ export 'src/core/omni_network_exception.dart'
 export 'src/core/result.dart' show Result, Ok, Err, OmniResultFuture;
 
 // Features.
-export 'src/auth/bearer_auth.dart' show BearerAuth;
+export 'src/auth/omni_auth.dart' show OmniAuth, AuthState;
+export 'src/auth/tokens.dart' show Tokens;
 export 'src/core/interceptor.dart' show OmniInterceptor;
 export 'src/core/cancel_token.dart' show OmniCancelToken;
 export 'src/resilience/retry_policy.dart' show RetryPolicy;

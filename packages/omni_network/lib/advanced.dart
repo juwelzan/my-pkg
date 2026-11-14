@@ -6,6 +6,9 @@ library;
 
 export 'omni_network.dart';
 
+export 'src/auth/bearer_auth.dart' show BearerAuth, AuthProvider;
+export 'src/auth/tokens.dart' show TokenStorage, MemoryTokenStorage;
+
 export 'src/cache/cache_store.dart';
 export 'src/core/cancel_signal.dart' show CancelSignal;
 export 'src/core/decoding.dart' show JsonDecoder;

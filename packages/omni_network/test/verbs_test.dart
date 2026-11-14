@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:omni_network/omni_network.dart';
+import 'package:omni_network/advanced.dart' show BearerAuth;
 import 'package:omni_network/testing.dart';
 import 'package:test/test.dart';
 
