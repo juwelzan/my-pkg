@@ -42,6 +42,7 @@ pushes, and closed when the page is popped or replaced.
 - Clean web URLs, browser titles, trailing-slash cleanup
 - Desktop back shortcuts and mouse back button
 - State restoration of the route stack
+- Lifecycle hooks (`OmniLifecycle`): app resume/pause, screen visible/hidden, system changes
 - Route metadata, `OmniRoute.current` / `.stack`, `onNavigate` hook, debug logging
 - Validated configuration with clear errors
 - Leak-tracked tests; profile-mode benchmark against plain go_router
@@ -50,7 +51,7 @@ pushes, and closed when the page is popped or replaced.
 
 ```yaml
 dependencies:
-  omni_route: ^0.2.1
+  omni_route: ^0.2.2
   flutter_bloc: ^9.1.1   # for context.read / BlocBuilder in your code
   go_router: ^18.1.4     # only if you use go_router types directly
 ```
@@ -159,6 +160,46 @@ class _DashboardState extends OmniState<DashboardScreen> {
 `OmniState` is a normal `State`: `initState`, `didChangeDependencies`,
 `didUpdateWidget` and `dispose` behave exactly as in Flutter. It adds
 `metadata` and `routeState` (the `GoRouterState`).
+
+### Lifecycle hooks (both screen types)
+
+Add `with OmniLifecycle` and override only what you need — no
+`WidgetsBindingObserver`, no `addObserver`/`removeObserver`:
+
+```dart
+class FeedScreen extends OmniStatelessWidget with OmniLifecycle {
+  const FeedScreen({super.key});
+  @override
+  String get screenName => 'Feed';
+
+  @override
+  void onAppResumed(BuildContext context) =>
+      context.read<FeedBloc>().add(FeedRefreshed());
+
+  @override
+  Widget build(BuildContext context) => const FeedList();
+}
+
+class _PlayerState extends OmniState<PlayerScreen> with OmniLifecycle {
+  @override
+  void onScreenHidden(BuildContext context) => player.pause(); // pushed over, tab switched, popped
+  @override
+  void onAppPaused(BuildContext context) => player.pause();
+  ...
+}
+```
+
+| Hook | When |
+|---|---|
+| `onAppResumed` / `onAppInactive` / `onAppHidden` / `onAppPaused` / `onAppDetached` | app lifecycle (plus `onAppLifecycleChanged(state)` for all) |
+| `onScreenVisible` / `onScreenHidden` | this screen becomes / stops being the visible one: first shown, page pushed over it or popped back to, tab switched, being popped. Hidden events of a frame come before visible ones |
+| `onMemoryPressure` | system low on memory |
+| `onMetricsChanged` | size, rotation, insets, keyboard |
+| `onBrightnessChanged` / `onLocalesChanged` / `onTextScaleChanged` | system settings changed |
+
+Hooks run outside `build` (so `setState` and Bloc events are fine) and never
+after the screen is disposed. App and system hooks reach every mounted
+screen with the mixin, including covered pages and hidden tabs.
 
 ## 8. Screen registration
 

@@ -1,5 +1,6 @@
 import 'package:flutter/widgets.dart';
 
+import 'omni_lifecycle.dart';
 import 'omni_screen.dart';
 import 'omni_screen_host.dart';
 
@@ -25,12 +26,34 @@ abstract class OmniStatelessWidget extends StatelessWidget with OmniScreen {
 class _OmniStatelessElement extends StatelessElement {
   _OmniStatelessElement(OmniStatelessWidget super.widget);
 
+  // Only screens that mix in OmniLifecycle get a hub (no cost otherwise).
+  OmniLifecycleHub? _lifecycle;
+
+  @override
+  void mount(Element? parent, Object? newSlot) {
+    if (widget is OmniLifecycle) {
+      _lifecycle = OmniLifecycleHub(
+        this,
+        () => widget is OmniLifecycle ? widget as OmniLifecycle : null,
+      );
+    }
+    super.mount(parent, newSlot);
+  }
+
+  @override
+  void unmount() {
+    _lifecycle?.dispose();
+    _lifecycle = null;
+    super.unmount();
+  }
+
   // Validating in build (not mount) lets Flutter show an ErrorWidget and
   // dispose the element normally.
   @override
   Widget build() {
     final screen = widget as OmniStatelessWidget;
     validateScreen(screen);
+    _lifecycle?.trackVisibility();
     if (isHosted(this, screen)) return super.build();
     // Shown outside a route: provide our own Blocs and build the screen
     // with a context below them.

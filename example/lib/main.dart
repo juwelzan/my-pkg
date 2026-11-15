@@ -199,8 +199,16 @@ class DashboardScreen extends OmniStatefulWidget {
   State<DashboardScreen> createState() => _DashboardState();
 }
 
-class _DashboardState extends OmniState<DashboardScreen> {
+class _DashboardState extends OmniState<DashboardScreen> with OmniLifecycle {
   int taps = 0;
+  int returns = 0;
+
+  // Lifecycle hooks: no WidgetsBindingObserver boilerplate.
+  @override
+  void onAppResumed(BuildContext context) => setState(() => returns++);
+
+  @override
+  void onScreenVisible(BuildContext context) => debugPrint('Dashboard visible');
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: Text(widget.screenName)),
@@ -209,6 +217,7 @@ class _DashboardState extends OmniState<DashboardScreen> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text('Tapped $taps times (kept across tabs)'),
+          Text('Back in the app $returns times'),
           TextButton(
             onPressed: () => setState(() => taps++),
             child: const Text('Tap'),

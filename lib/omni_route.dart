@@ -21,6 +21,7 @@ export 'src/routing/omni_page.dart'
 export 'src/routing/omni_params.dart' hide OmniRouteStateScope;
 export 'src/routing/omni_route_group.dart';
 export 'src/routing/omni_shell.dart';
+export 'src/screens/omni_lifecycle.dart' show OmniLifecycle;
 export 'src/screens/omni_screen.dart' show OmniScreen, OmniScreenMetadata;
 export 'src/screens/omni_screen_host.dart' show OmniScreenHost;
 export 'src/screens/omni_stateful_widget.dart';

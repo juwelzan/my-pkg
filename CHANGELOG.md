@@ -1,3 +1,16 @@
+## 0.2.2
+
+No API changes; purely additive.
+
+- New: `OmniLifecycle` mixin — lifecycle hooks for both screen types without
+  `WidgetsBindingObserver` boilerplate. Opt in with `with OmniLifecycle` on
+  an `OmniStatelessWidget` or an `OmniState`; registration and cleanup are
+  automatic. Hooks: `onAppLifecycleChanged`, `onAppResumed`,
+  `onAppInactive`, `onAppHidden`, `onAppPaused`, `onAppDetached`,
+  `onScreenVisible`, `onScreenHidden` (push/pop/tab), `onMemoryPressure`,
+  `onMetricsChanged`, `onBrightnessChanged`, `onLocalesChanged`,
+  `onTextScaleChanged`. Screens without the mixin are unaffected.
+
 ## 0.2.1
 
 No API changes; all 0.2.0 code keeps compiling and behaving the same,

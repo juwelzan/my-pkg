@@ -2,6 +2,7 @@ import 'package:flutter/widgets.dart';
 
 import 'package:go_router/go_router.dart';
 
+import 'omni_lifecycle.dart';
 import 'omni_screen.dart';
 import 'omni_screen_host.dart';
 
@@ -20,6 +21,16 @@ abstract class OmniStatefulWidget extends StatefulWidget with OmniScreen {
 class _OmniStatefulElement extends StatefulElement {
   _OmniStatefulElement(OmniStatefulWidget super.widget);
 
+  // Only States that mix in OmniLifecycle get a hub (no cost otherwise).
+  OmniLifecycleHub? _lifecycle;
+
+  @override
+  void unmount() {
+    _lifecycle?.dispose();
+    _lifecycle = null;
+    super.unmount();
+  }
+
   @override
   void mount(Element? parent, Object? newSlot) {
     // Reported (not thrown) before initState runs, so the cause is shown
@@ -33,12 +44,19 @@ class _OmniStatefulElement extends StatefulElement {
         ),
       );
     }
+    if (state is OmniLifecycle) {
+      _lifecycle = OmniLifecycleHub(
+        this,
+        () => state is OmniLifecycle ? state as OmniLifecycle : null,
+      );
+    }
     super.mount(parent, newSlot);
   }
 
   @override
   Widget build() {
     validateScreen(widget as OmniScreen);
+    _lifecycle?.trackVisibility();
     return super.build();
   }
 }
