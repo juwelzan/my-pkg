@@ -81,6 +81,13 @@ class ExampleApp extends StatelessWidget {
     initialRoute: '/dashboard',
     guards: const [AuthGuard()],
     logNavigation: true, // debug builds print each navigation
+    dismissKeyboardOnTap: true, // tap outside the edit form closes the keyboard
+    maxTextScale: 1.4, // very large system fonts won't break layouts
+    // Android: press back twice on the first page to leave the app.
+    doubleBackToExit: const Duration(seconds: 2),
+    onExitWarning: (context) => ScaffoldMessenger.maybeOf(
+      context,
+    )?.showSnackBar(const SnackBar(content: Text('Press back again to exit'))),
     restorationScopeId: 'router', // restore the route stack after restart
     blocs: [
       // Global Blocs: created once, live for the whole app.

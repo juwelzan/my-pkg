@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
 import '../bloc/omni_bloc.dart';
@@ -7,6 +9,8 @@ import '../bloc/omni_bloc_scope.dart';
 import '../guards/omni_guard.dart';
 import '../routing/omni_page.dart';
 import '../routing/omni_route_registry.dart';
+import '../screens/omni_lifecycle.dart';
+import 'omni_app_features.dart';
 import 'omni_desktop_back.dart';
 import 'omni_route_entry.dart';
 import 'omni_route.dart';
@@ -51,6 +55,17 @@ class OmniApp extends StatefulWidget {
     this.restorationScopeId,
     this.onNavigate,
     this.logNavigation = false,
+    this.lifecycle,
+    this.onInit,
+    this.splash,
+    this.dismissKeyboardOnTap = false,
+    this.doubleBackToExit,
+    this.onExitWarning,
+    this.orientations,
+    this.minTextScale,
+    this.maxTextScale,
+    this.blocObserver,
+    this.onError,
   });
 
   /// [OmniPage]s and any raw go_router [RouteBase]s.
@@ -118,6 +133,55 @@ class OmniApp extends StatefulWidget {
   /// Print each navigation (debug builds only).
   final bool logNavigation;
 
+  // ── App-level conveniences (all optional, off by default) ─────────────
+
+  /// App-wide lifecycle hooks: an object that mixes in [OmniLifecycle]
+  /// (`onAppResumed`, `onAppPaused`, `onMemoryPressure`, ...). Its context
+  /// can read global Blocs. Replaces a hand-written `WidgetsBindingObserver`.
+  final OmniLifecycle? lifecycle;
+
+  /// Startup work run once before the first page is shown (load settings,
+  /// restore login, warm caches). The context can read global Blocs.
+  /// Guards then see the loaded state. If it throws, the error is reported
+  /// and the app opens anyway.
+  final Future<void> Function(BuildContext context)? onInit;
+
+  /// Shown while [onInit] runs. Return a complete widget (for example a
+  /// `MaterialApp(home: SplashScreen())`). Default: an empty box.
+  final WidgetBuilder? splash;
+
+  /// Close the keyboard when the user taps outside a text field.
+  final bool dismissKeyboardOnTap;
+
+  /// Android: on the first page, back must be pressed twice within this
+  /// time to leave the app. Null (default) = normal back behaviour.
+  final Duration? doubleBackToExit;
+
+  /// Called on the first back press when [doubleBackToExit] is set — show a
+  /// SnackBar such as "Press back again to exit".
+  final void Function(BuildContext context)? onExitWarning;
+
+  /// Allowed device orientations (e.g. portrait only). Restored to "all"
+  /// when this OmniApp is disposed.
+  final List<DeviceOrientation>? orientations;
+
+  /// Lower bound for the system text scale (accessibility font size).
+  final double? minTextScale;
+
+  /// Upper bound for the system text scale, so large accessibility fonts
+  /// cannot break layouts.
+  final double? maxTextScale;
+
+  /// Installed as `Bloc.observer` while this OmniApp is mounted (before any
+  /// Bloc is created); the previous observer is restored on dispose.
+  final BlocObserver? blocObserver;
+
+  /// Receives every uncaught error: Flutter framework errors
+  /// (`FlutterError.onError`) and async/platform errors
+  /// (`PlatformDispatcher.onError`). Previous handlers still run. Use it for
+  /// crash reporting. Restored on dispose.
+  final void Function(Object error, StackTrace stack)? onError;
+
   @override
   State<OmniApp> createState() => _OmniAppState();
 }
@@ -132,6 +196,7 @@ class _OmniAppState extends State<OmniApp> {
   @override
   void initState() {
     super.initState();
+    _installGlobals();
     try {
       _blocs = OmniBlocRegistry(widget.blocs);
       final registry = OmniRouteRegistry(widget.routes);
@@ -197,8 +262,62 @@ class _OmniAppState extends State<OmniApp> {
     widget.onNavigate?.call(event);
   }
 
+  // Previous global values, restored in dispose (only if still ours).
+  FlutterExceptionHandler? _prevFlutterOnError;
+  FlutterExceptionHandler? _ourFlutterOnError;
+  bool Function(Object, StackTrace)? _prevPlatformOnError;
+  bool Function(Object, StackTrace)? _ourPlatformOnError;
+  BlocObserver? _prevBlocObserver;
+
+  void _installGlobals() {
+    final onError = widget.onError;
+    if (onError != null) {
+      _prevFlutterOnError = FlutterError.onError;
+      FlutterError.onError = _ourFlutterOnError = (details) {
+        onError(details.exception, details.stack ?? StackTrace.empty);
+        _prevFlutterOnError?.call(details);
+      };
+      final dispatcher = PlatformDispatcher.instance;
+      _prevPlatformOnError = dispatcher.onError;
+      dispatcher.onError = _ourPlatformOnError = (error, stack) {
+        onError(error, stack);
+        // false = not handled: the engine's default reporting still runs.
+        return _prevPlatformOnError?.call(error, stack) ?? false;
+      };
+    }
+    final observer = widget.blocObserver;
+    if (observer != null) {
+      _prevBlocObserver = Bloc.observer;
+      Bloc.observer = observer;
+    }
+    final orientations = widget.orientations;
+    if (orientations != null) {
+      SystemChrome.setPreferredOrientations(orientations);
+    }
+  }
+
+  void _restoreGlobals() {
+    if (_ourFlutterOnError != null &&
+        identical(FlutterError.onError, _ourFlutterOnError)) {
+      FlutterError.onError = _prevFlutterOnError;
+    }
+    final dispatcher = PlatformDispatcher.instance;
+    if (_ourPlatformOnError != null &&
+        identical(dispatcher.onError, _ourPlatformOnError)) {
+      dispatcher.onError = _prevPlatformOnError;
+    }
+    final prevObserver = _prevBlocObserver;
+    if (prevObserver != null && identical(Bloc.observer, widget.blocObserver)) {
+      Bloc.observer = prevObserver;
+    }
+    if (widget.orientations != null) {
+      SystemChrome.setPreferredOrientations(const []); // all orientations
+    }
+  }
+
   @override
   void dispose() {
+    _restoreGlobals();
     final router = _router;
     if (router != null) {
       router.routerDelegate.removeListener(_navigated);
@@ -207,6 +326,32 @@ class _OmniAppState extends State<OmniApp> {
     }
     _guardRefresh.dispose();
     super.dispose();
+  }
+
+  /// Optional app-level wrappers; each is added only when its setting is on.
+  Widget _wrapApp(Widget app) {
+    var child = app;
+    if (widget.minTextScale != null || widget.maxTextScale != null) {
+      child = Builder(
+        builder: (context) => MediaQuery.withClampedTextScaling(
+          minScaleFactor: widget.minTextScale ?? 0,
+          maxScaleFactor: widget.maxTextScale ?? double.infinity,
+          child: app,
+        ),
+      );
+    }
+    if (widget.dismissKeyboardOnTap) {
+      child = OmniKeyboardDismiss(child: child);
+    }
+    final onInit = widget.onInit;
+    if (onInit != null) {
+      child = OmniInitGate(onInit: onInit, splash: widget.splash, child: child);
+    }
+    final lifecycle = widget.lifecycle;
+    if (lifecycle != null) {
+      child = OmniAppLifecycleScope(lifecycle: lifecycle, child: child);
+    }
+    return child;
   }
 
   @override
@@ -219,19 +364,23 @@ class _OmniAppState extends State<OmniApp> {
       pageType: widget.pageType,
       titles: widget.setTitles,
       errorBuilder: widget.notFound ?? defaultOmniErrorBuilder,
+      exitWindow: widget.doubleBackToExit,
+      onExitWarning: widget.onExitWarning,
       child: OmniGlobalBlocScope(
         registry: _blocs,
         child: GuardRefresh(
           guards: _refreshGuards,
           notifier: _guardRefresh,
-          child: Builder(
-            builder: (c) => widget.desktopBack
-                ? OmniDesktopBack(
-                    router: router,
-                    escape: widget.escapeGoesBack,
-                    child: widget.builder(c, router),
-                  )
-                : widget.builder(c, router),
+          child: _wrapApp(
+            Builder(
+              builder: (c) => widget.desktopBack
+                  ? OmniDesktopBack(
+                      router: router,
+                      escape: widget.escapeGoesBack,
+                      child: widget.builder(c, router),
+                    )
+                  : widget.builder(c, router),
+            ),
           ),
         ),
       ),

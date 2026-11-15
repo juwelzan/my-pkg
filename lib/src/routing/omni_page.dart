@@ -7,6 +7,7 @@ import '../errors/omni_route_exception.dart';
 import '../guards/omni_guard.dart';
 import '../screens/omni_screen.dart';
 import '../screens/omni_screen_host.dart';
+import '../core/omni_app_features.dart';
 import 'omni_params.dart';
 import 'omni_title.dart';
 
@@ -155,6 +156,14 @@ class OmniPage<S extends OmniScreen> extends GoRoute {
     } on OmniRouteException catch (e) {
       child = config.errorBuilder(context, state, e);
     }
+    final exitWindow = config.exitWindow;
+    if (exitWindow != null && OmniExitGuard.supported) {
+      child = OmniExitGuard(
+        window: exitWindow,
+        onWarning: config.onExitWarning,
+        child: child,
+      );
+    }
     return (pageType ?? config.pageType)(state.pageKey, name, child);
   }
 }
@@ -169,6 +178,8 @@ class OmniPageConfig extends InheritedWidget {
     required this.pageType,
     required this.titles,
     required this.errorBuilder,
+    this.exitWindow,
+    this.onExitWarning,
     required super.child,
   });
 
@@ -189,6 +200,12 @@ class OmniPageConfig extends InheritedWidget {
   /// Shows invalid-parameter and not-found errors.
   final OmniErrorBuilder errorBuilder;
 
+  /// "Press back again to exit" window on the first page (Android), or null.
+  final Duration? exitWindow;
+
+  /// Called on the first back press when [exitWindow] is set.
+  final void Function(BuildContext context)? onExitWarning;
+
   /// The nearest settings, read without subscribing (pages are built by the
   /// router, which already rebuilds them when needed).
   static OmniPageConfig of(BuildContext context) =>
@@ -198,7 +215,9 @@ class OmniPageConfig extends InheritedWidget {
   bool updateShouldNotify(OmniPageConfig old) =>
       old.pageType != pageType ||
       old.titles != titles ||
-      old.errorBuilder != errorBuilder;
+      old.errorBuilder != errorBuilder ||
+      old.exitWindow != exitWindow ||
+      old.onExitWarning != onExitWarning;
 }
 
 /// Default error page: details in debug, a generic message in release.

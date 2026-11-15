@@ -1,3 +1,21 @@
+## 0.2.3
+
+No API changes; purely additive. Every new `OmniApp` parameter is optional
+and off by default, so existing apps behave exactly as before.
+
+- New `OmniApp(lifecycle:)`: app-wide `OmniLifecycle` hooks (resume, pause,
+  memory pressure, ...) whose context can read global Blocs.
+- New `OmniApp(onInit:, splash:)`: async startup work before the first
+  page; guards see the loaded state. Errors are reported and the app opens.
+- New `OmniApp(dismissKeyboardOnTap:)`: close the keyboard on outside taps.
+- New `OmniApp(doubleBackToExit:, onExitWarning:)`: Android "press back
+  again to exit" on the first page; other pages and platforms unchanged.
+- New `OmniApp(orientations:)`: preferred orientations, reset on dispose.
+- New `OmniApp(minTextScale:, maxTextScale:)`: clamp the system text scale.
+- New `OmniApp(blocObserver:)`: installs `Bloc.observer`, restored on dispose.
+- New `OmniApp(onError:)`: receives Flutter and platform errors (previous
+  handlers still run; default reporting is kept); restored on dispose.
+
 ## 0.2.2
 
 No API changes; purely additive.

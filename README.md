@@ -49,7 +49,7 @@ OmniRoute শুধু এদের মধ্যে যে বারবার �
 
 ```yaml
 dependencies:
-  omni_route: ^0.2.2
+  omni_route: ^0.2.3
   flutter_bloc: ^9.1.1   # context.read / BlocBuilder ব্যবহারের জন্য
   go_router: ^18.1.4     # go_router-এর type (যেমন GoRouterState) সরাসরি লাগলে
 ```
@@ -155,6 +155,8 @@ class StudentScreen extends OmniStatelessWidget {
 | Bottom navigation / tab, প্রতিটা tab নিজের stack রাখবে | `OmniStatefulShell` |
 | Login ছাড়া ঢুকতে না দেওয়া, role check | `OmniGuard` |
 | App resume/pause, screen দেখা যাচ্ছে কি না | `OmniLifecycle` mixin |
+| পুরো অ্যাপের resume/pause, শুরুতে async load, crash reporting | `OmniApp(lifecycle:, onInit:, onError:)` (৪.১) |
+| keyboard বন্ধ, দুবার back-এ exit, portrait lock, font সীমা | `OmniApp(dismissKeyboardOnTap:, doubleBackToExit:, orientations:, maxTextScale:)` |
 | Route ছাড়া (layout-এর ভিতরে) stateful screen বসানো | `OmniScreenHost` |
 | Web-এ `#` ছাড়া URL | `OmniRoute.usePathUrls()` |
 | Analytics / screen view tracking | `OmniApp(onNavigate:)` |
@@ -191,6 +193,17 @@ OmniApp(
   onNavigate: (nav) {},         // প্রতিটা navigation-এর পর ডাকা হয় (analytics)
   logNavigation: false,         // true দিলে debug build-এ প্রতিটা navigation print হবে
 
+  // অ্যাপ-লেভেল সুবিধা (সব ঐচ্ছিক, default-এ বন্ধ) — বিস্তারিত ৪.১ অংশে:
+  lifecycle: null,              // পুরো অ্যাপের resume/pause hook
+  onInit: null, splash: null,   // শুরুতে async কাজ + splash
+  dismissKeyboardOnTap: false,  // বাইরে tap করলে keyboard বন্ধ
+  doubleBackToExit: null,       // Android: দুবার back চাপলে বের হবে
+  onExitWarning: null,          // প্রথম back-এ বার্তা দেখানো
+  orientations: null,           // portrait / landscape lock
+  minTextScale: null, maxTextScale: null, // font size-এর সীমা
+  blocObserver: null,           // Bloc.observer
+  onError: null,                // সব uncaught error (crash reporting)
+
   // সরাসরি GoRouter-এ যায় (প্রয়োজন হলে):
   redirect: null, redirectLimit: 5, refreshListenable: null,
   navigatorKey: null, observers: null, debugLogDiagnostics: false,
@@ -202,6 +215,71 @@ OmniApp(
 
 **ভুল configuration:** কোনো path ভুল হলে, একই route দুবার থাকলে বা একই Bloc দুবার register করলে
 অ্যাপ শুরুতেই পরিষ্কার error দেখাবে — পরে কোনো এক অজানা মুহূর্তে crash হবে না।
+
+### ৪.১ অ্যাপ-লেভেল সুবিধা — যেগুলো আগে হাতে লিখতে হতো
+
+নিচের প্রতিটা আগে `main()` বা root widget-এ নিজে লিখতে হতো। এখন `OmniApp`-এ একটা
+parameter দিলেই হয়। সব ঐচ্ছিক — না দিলে আগের মতোই চলে।
+
+```dart
+// পুরো অ্যাপের lifecycle — WidgetsBindingObserver লিখতে হবে না
+class AppLifecycle with OmniLifecycle {
+  @override
+  void onAppResumed(BuildContext context) =>
+      context.read<AuthBloc>().add(TokenCheckRequested()); // global Bloc পড়া যায়
+
+  @override
+  void onAppPaused(BuildContext context) =>
+      context.read<DraftBloc>().add(DraftSaved());
+}
+
+OmniApp(
+  // ① অ্যাপ-লেভেল lifecycle hook (১৩তম অংশের সব hook এখানে চলে)
+  lifecycle: AppLifecycle(),
+
+  // ② শুরুতে async কাজ (settings load, login restore) — শেষ হলে প্রথম পেজ খোলে।
+  //    guard তখন load করা state দেখে, তাই ভুল করে login পেজে যায় না।
+  onInit: (context) async {
+    await context.read<SettingsBloc>().load();
+    context.read<AuthBloc>().add(SessionRestored());
+  },
+  // onInit চলাকালীন যা দেখাবে (পূর্ণ widget দিন)
+  splash: (context) => const MaterialApp(home: SplashScreen()),
+
+  // ③ text field-এর বাইরে tap করলে keyboard বন্ধ
+  dismissKeyboardOnTap: true,
+
+  // ④ Android: প্রথম পেজে ২ সেকেন্ডের মধ্যে দুবার back চাপলে অ্যাপ বন্ধ
+  doubleBackToExit: const Duration(seconds: 2),
+  onExitWarning: (context) => ScaffoldMessenger.of(context).showSnackBar(
+    const SnackBar(content: Text('বের হতে আবার back চাপুন')),
+  ),
+
+  // ⑤ শুধু portrait (OmniApp বন্ধ হলে আবার সব orientation)
+  orientations: const [DeviceOrientation.portraitUp],
+
+  // ⑥ বড় accessibility font-এ layout ভাঙবে না
+  maxTextScale: 1.3,
+
+  // ⑦ সব Bloc-এর event/state log (Bloc.observer = ... লিখতে হবে না)
+  blocObserver: AppBlocObserver(),
+
+  // ⑧ সব uncaught error এক জায়গায় — crash reporting-এর জন্য
+  onError: (error, stack) => crashReporter.record(error, stack),
+  ...
+)
+```
+
+| Parameter | আগে হাতে যা লিখতে হতো | নোট |
+|---|---|---|
+| `lifecycle` | root widget-এ `WidgetsBindingObserver` + `addObserver`/`removeObserver` | context দিয়ে global Bloc পড়া যায় |
+| `onInit` + `splash` | `FutureBuilder` + splash screen + guard-এর race condition সামলানো | error হলে report করে অ্যাপ খুলে যায় — splash-এ আটকে থাকে না |
+| `dismissKeyboardOnTap` | `GestureDetector(onTap: () => FocusScope.of(context).unfocus())` | text field-এ tap করলে focus থাকে |
+| `doubleBackToExit` | `PopScope` + সময় হিসাব + `SystemNavigator.pop()` | শুধু Android, শুধু প্রথম পেজে; বাকি পেজে back আগের মতো |
+| `orientations` | `main()`-এ `SystemChrome.setPreferredOrientations` | dispose হলে reset |
+| `minTextScale` / `maxTextScale` | `MediaQuery` builder দিয়ে text scale clamp | dialog-সহ পুরো অ্যাপে |
+| `blocObserver` | `main()`-এ `Bloc.observer = ...` | আগের observer dispose-এ ফেরত |
+| `onError` | `FlutterError.onError` + `PlatformDispatcher.onError` দুটো আলাদা | আগের handler-ও চলে; default reporting বন্ধ হয় না |
 
 ---
 
