@@ -22,6 +22,37 @@ typedef OmniErrorBuilder =
 typedef OmniPageType =
     Page<void> Function(LocalKey key, String? name, Widget child);
 
+/// Builds a page transition; same signature as Flutter's
+/// `PageRouteBuilder.transitionsBuilder`.
+typedef OmniTransitionBuilder =
+    Widget Function(
+      BuildContext context,
+      Animation<double> animation,
+      Animation<double> secondaryAnimation,
+      Widget child,
+    );
+
+/// Built-in animated transitions; see [OmniPages.transition].
+enum OmniTransition {
+  /// Cross-fade.
+  fade,
+
+  /// Slide in from the end edge (RTL-aware), page below shifts slightly.
+  slide,
+
+  /// Slide up from the bottom.
+  slideUp,
+
+  /// Zoom in from 92% with a fade.
+  scale,
+
+  /// Zoom in from 96% with a fade (subtle).
+  fadeScale,
+
+  /// Fade in while moving up slightly.
+  fadeSlide,
+}
+
 /// Built-in page types for `OmniApp(pageType:)` / `OmniPage(pageType:)`.
 abstract final class OmniPages {
   /// Default. Uses the theme's transition for the platform: Android
@@ -52,6 +83,168 @@ abstract final class OmniPages {
         restorationId: _restorationId(key),
         child: child,
       );
+
+  // ── Animated transitions ────────────────────────────────────────────
+  //
+  // Built for smooth, fast navigation: short durations, an ease-out curve,
+  // and only opacity/transform effects (composited by the GPU, no relayout
+  // per frame). Animations use `animation.drive(...)`, so nothing is
+  // allocated per frame and nothing needs disposing.
+  //
+  // Custom transitions replace the platform's: iOS swipe-back and Android
+  // predictive back need `material` or `cupertino`.
+
+  /// Default open duration of the built-in transitions.
+  static const defaultDuration = Duration(milliseconds: 250);
+
+  /// Default close duration of the built-in transitions (closing feels
+  /// faster when slightly shorter).
+  static const defaultReverseDuration = Duration(milliseconds: 200);
+
+  /// Cross-fade.
+  static Page<void> fade(LocalKey key, String? name, Widget child) =>
+      _fade(key, name, child);
+  static final OmniPageType _fade = transition(OmniTransition.fade);
+
+  /// Slides in from the end edge (right in LTR, left in RTL); the page below
+  /// shifts slightly the other way.
+  static Page<void> slide(LocalKey key, String? name, Widget child) =>
+      _slide(key, name, child);
+  static final OmniPageType _slide = transition(OmniTransition.slide);
+
+  /// Slides up from the bottom (sheets, create/edit screens).
+  static Page<void> slideUp(LocalKey key, String? name, Widget child) =>
+      _slideUp(key, name, child);
+  static final OmniPageType _slideUp = transition(OmniTransition.slideUp);
+
+  /// Zooms in from 92% while fading in.
+  static Page<void> scale(LocalKey key, String? name, Widget child) =>
+      _scale(key, name, child);
+  static final OmniPageType _scale = transition(OmniTransition.scale);
+
+  /// Zooms in from 96% with a fade — subtle, good for details/dialogs.
+  static Page<void> fadeScale(LocalKey key, String? name, Widget child) =>
+      _fadeScale(key, name, child);
+  static final OmniPageType _fadeScale = transition(OmniTransition.fadeScale);
+
+  /// Fades in while moving up a few pixels — a light, modern default.
+  static Page<void> fadeSlide(LocalKey key, String? name, Widget child) =>
+      _fadeSlide(key, name, child);
+  static final OmniPageType _fadeSlide = transition(OmniTransition.fadeSlide);
+
+  /// A built-in [kind] with your own [duration], [reverseDuration] and
+  /// [curve]:
+  ///
+  /// ```dart
+  /// OmniApp(pageType: OmniPages.transition(
+  ///   OmniTransition.slide,
+  ///   duration: const Duration(milliseconds: 200),
+  /// ))
+  /// ```
+  static OmniPageType transition(
+    OmniTransition kind, {
+    Duration duration = defaultDuration,
+    Duration reverseDuration = defaultReverseDuration,
+    Curve curve = Curves.easeOutCubic,
+  }) => custom(
+    _builderFor(kind, CurveTween(curve: curve)),
+    duration: duration,
+    reverseDuration: reverseDuration,
+  );
+
+  /// Your own transition. [builder] has the same signature as Flutter's
+  /// `transitionsBuilder`:
+  ///
+  /// ```dart
+  /// OmniPages.custom(
+  ///   (context, animation, secondaryAnimation, child) => RotationTransition(
+  ///     turns: animation.drive(Tween(begin: 0.9, end: 1.0)),
+  ///     child: child,
+  ///   ),
+  ///   duration: const Duration(milliseconds: 300),
+  /// )
+  /// ```
+  ///
+  /// [opaque] false + [barrierColor] give a dialog-style page with the
+  /// previous page visible behind it.
+  static OmniPageType custom(
+    OmniTransitionBuilder builder, {
+    Duration duration = defaultDuration,
+    Duration? reverseDuration,
+    bool opaque = true,
+    Color? barrierColor,
+    bool barrierDismissible = false,
+    bool fullscreenDialog = false,
+  }) =>
+      (key, name, child) => CustomTransitionPage<void>(
+        key: key,
+        name: name,
+        restorationId: _restorationId(key),
+        transitionDuration: duration,
+        reverseTransitionDuration: reverseDuration ?? duration,
+        opaque: opaque,
+        barrierColor: barrierColor,
+        barrierDismissible: barrierDismissible,
+        fullscreenDialog: fullscreenDialog,
+        transitionsBuilder: builder,
+        child: child,
+      );
+
+  static OmniTransitionBuilder _builderFor(OmniTransition kind, CurveTween c) {
+    switch (kind) {
+      case OmniTransition.fade:
+        return (context, a, s, child) =>
+            FadeTransition(opacity: a.drive(c), child: child);
+      case OmniTransition.slide:
+        return (context, a, s, child) {
+          final dir = Directionality.of(context) == TextDirection.rtl ? -1 : 1;
+          return SlideTransition(
+            position: s
+                .drive(c)
+                .drive(Tween(begin: Offset.zero, end: Offset(-0.25 * dir, 0))),
+            child: SlideTransition(
+              position: a
+                  .drive(c)
+                  .drive(Tween(begin: Offset(1.0 * dir, 0), end: Offset.zero)),
+              child: child,
+            ),
+          );
+        };
+      case OmniTransition.slideUp:
+        return (context, a, s, child) => SlideTransition(
+          position: a
+              .drive(c)
+              .drive(Tween(begin: const Offset(0, 1), end: Offset.zero)),
+          child: child,
+        );
+      case OmniTransition.scale:
+        return (context, a, s, child) => FadeTransition(
+          opacity: a.drive(c),
+          child: ScaleTransition(
+            scale: a.drive(c).drive(Tween(begin: 0.92, end: 1.0)),
+            child: child,
+          ),
+        );
+      case OmniTransition.fadeScale:
+        return (context, a, s, child) => FadeTransition(
+          opacity: a.drive(c),
+          child: ScaleTransition(
+            scale: a.drive(c).drive(Tween(begin: 0.96, end: 1.0)),
+            child: child,
+          ),
+        );
+      case OmniTransition.fadeSlide:
+        return (context, a, s, child) => FadeTransition(
+          opacity: a.drive(c),
+          child: SlideTransition(
+            position: a
+                .drive(c)
+                .drive(Tween(begin: const Offset(0, 0.04), end: Offset.zero)),
+            child: child,
+          ),
+        );
+    }
+  }
 
   // go_router page keys are unique, stable ValueKey<String>s per match:
   // reuse them so the Navigator can restore the page stack.

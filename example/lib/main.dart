@@ -127,7 +127,12 @@ class ExampleApp extends StatelessWidget {
                         ':id',
                         (p) => StudentDetailScreen(id: p.pathInt('id')),
                         routes: [
-                          OmniPage('edit', (_) => const StudentEditScreen()),
+                          // Edit form slides up from the bottom.
+                          OmniPage(
+                            'edit',
+                            (_) => const StudentEditScreen(),
+                            pageType: OmniPages.slideUp,
+                          ),
                         ],
                       ),
                     ],

@@ -1,3 +1,19 @@
+## 0.2.4
+
+No API changes; purely additive.
+
+- New built-in animated page transitions: `OmniPages.fade`, `slide`
+  (RTL-aware, with parallax on the page below), `slideUp`, `scale`,
+  `fadeScale`, `fadeSlide`. 250 ms open / 200 ms close, `easeOutCubic`,
+  opacity/transform only (GPU-composited, no per-frame allocation).
+- New `OmniPages.transition(OmniTransition, duration:, reverseDuration:,
+  curve:)` to tune a built-in.
+- New `OmniPages.custom(builder, ...)` transition builder (Flutter's
+  `transitionsBuilder` signature), with `opaque`, `barrierColor`,
+  `barrierDismissible`, `fullscreenDialog` for dialog-style pages.
+- New public types `OmniTransition`, `OmniTransitionBuilder`.
+- Restoration ids are kept for all new page types.
+
 ## 0.2.3
 
 No API changes; purely additive. Every new `OmniApp` parameter is optional

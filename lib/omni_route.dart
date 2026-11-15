@@ -15,6 +15,8 @@ export 'src/routing/omni_page.dart'
         OmniPage,
         OmniPages,
         OmniPageType,
+        OmniTransition,
+        OmniTransitionBuilder,
         OmniScreenBuilder,
         OmniErrorBuilder,
         defaultOmniErrorBuilder;

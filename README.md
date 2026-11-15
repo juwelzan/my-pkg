@@ -49,7 +49,7 @@ OmniRoute শুধু এদের মধ্যে যে বারবার �
 
 ```yaml
 dependencies:
-  omni_route: ^0.2.3
+  omni_route: ^0.2.4
   flutter_bloc: ^9.1.1   # context.read / BlocBuilder ব্যবহারের জন্য
   go_router: ^18.1.4     # go_router-এর type (যেমন GoRouterState) সরাসরি লাগলে
 ```
@@ -153,6 +153,7 @@ class StudentScreen extends OmniStatelessWidget {
 | কয়েকটা route একই Bloc ভাগ করবে (detail + edit) | `OmniRouteGroup` |
 | সব child route-এর চারপাশে একই layout | `OmniShell` |
 | Bottom navigation / tab, প্রতিটা tab নিজের stack রাখবে | `OmniStatefulShell` |
+| পেজ খোলার animation (fade, slide, scale…) বা নিজের transition | `OmniPages.fadeSlide`, `OmniPages.transition(...)`, `OmniPages.custom(...)` |
 | Login ছাড়া ঢুকতে না দেওয়া, role check | `OmniGuard` |
 | App resume/pause, screen দেখা যাচ্ছে কি না | `OmniLifecycle` mixin |
 | পুরো অ্যাপের resume/pause, শুরুতে async load, crash reporting | `OmniApp(lifecycle:, onInit:, onError:)` (৪.১) |
@@ -854,6 +855,73 @@ OmniApp(pageType: OmniPages.cupertino, ...)               // সব জায়
 OmniApp(pageType: OmniPages.none, ...)                    // animation নেই (web/desktop-এ ভালো)
 OmniPage('/x', builder, pageType: OmniPages.none)         // শুধু একটা route-এ
 ```
+
+#### Built-in animation (smooth আর দ্রুত)
+
+```dart
+// পুরো অ্যাপে একটা animation — যে screen-এই যান, একই রকম smooth
+OmniApp(pageType: OmniPages.fadeSlide, ...)
+
+// শুধু একটা route-এ আলাদা animation
+OmniPage('/students/:id/edit', builder, pageType: OmniPages.slideUp)
+```
+
+| `OmniPages.` | দেখতে কেমন | কোথায় মানায় |
+|---|---|---|
+| `fade` | আস্তে আস্তে দেখা যায় | tab-এর মতো অংশ বদল, web |
+| `slide` | ডান দিক থেকে ঢোকে (RTL ভাষায় বাম দিক থেকে), নিচের পেজ একটু সরে | তালিকা → detail |
+| `slideUp` | নিচ থেকে উপরে ওঠে | নতুন তৈরি / edit form, sheet |
+| `scale` | ৯২% থেকে বড় হয়ে fade-in | ছবি / card খোলা |
+| `fadeScale` | ৯৬% থেকে হালকা zoom + fade | detail, dialog-এর মতো পেজ |
+| `fadeSlide` | fade-in-এর সাথে একটু উপরে ওঠে | আধুনিক, হালকা default |
+
+সব built-in খোলে **২৫০ms**-এ আর বন্ধ হয় **২০০ms**-এ, `easeOutCubic` curve-এ।
+শুধু opacity আর transform ব্যবহার করে (GPU-তে চলে, প্রতি frame-এ layout হিসাব হয় না),
+তাই দুর্বল ফোনেও smooth।
+
+#### সময় আর curve নিজে ঠিক করা
+
+```dart
+OmniApp(
+  pageType: OmniPages.transition(
+    OmniTransition.slide,                          // কোন animation
+    duration: const Duration(milliseconds: 200),   // খোলার সময়
+    reverseDuration: const Duration(milliseconds: 160), // বন্ধের সময়
+    curve: Curves.easeOutQuart,                    // গতির ধরন
+  ),
+  ...
+)
+```
+
+#### নিজের animation (transition builder)
+
+```dart
+// Flutter-এর transitionsBuilder-এর মতোই signature
+final rotateIn = OmniPages.custom(
+  (context, animation, secondaryAnimation, child) => RotationTransition(
+    turns: animation.drive(Tween(begin: 0.95, end: 1.0)),
+    child: FadeTransition(opacity: animation, child: child),
+  ),
+  duration: const Duration(milliseconds: 300),
+);
+
+OmniPage('/promo', (_) => const PromoScreen(), pageType: rotateIn);
+
+// Dialog-এর মতো পেজ: পিছনের পেজ দেখা যাবে, বাইরে tap করলে বন্ধ
+OmniPage('/filter', (_) => const FilterScreen(), pageType: OmniPages.custom(
+  (context, animation, _, child) => FadeTransition(opacity: animation, child: child),
+  opaque: false,
+  barrierColor: Colors.black54,
+  barrierDismissible: true,
+));
+```
+
+> 💡 **দ্রুত রাখার টিপস:** animation-এ `animation.drive(...)` ব্যবহার করুন
+> (প্রতি frame-এ নতুন object তৈরি হয় না); blur বা `ClipPath`-এর মতো ভারী effect এড়িয়ে চলুন।
+>
+> ⚠️ **iOS swipe-back আর Android predictive back** শুধু `material` আর `cupertino`-তে থাকে।
+> custom animation দিলে সেই পেজে এগুলো থাকে না (back বাটন আর system back ঠিকই কাজ করে)।
+> তাই iOS-এ পুরো অ্যাপের জন্য `material` রেখে নির্দিষ্ট route-এ animation দেওয়াই ভালো।
 
 ### Back বাটন
 
