@@ -95,6 +95,7 @@ class OmniPage<S extends OmniScreen> extends GoRoute {
       composeGuards(guards, redirect),
       pageType,
       metadata,
+      List.unmodifiable(guards),
     );
     return page;
   }
@@ -109,6 +110,7 @@ class OmniPage<S extends OmniScreen> extends GoRoute {
     GoRouterRedirect? redirect,
     this.pageType,
     Map<String, dynamic>? metadata,
+    this.guards,
   ) : super(
         metadata: metadata,
         path: path,
@@ -124,6 +126,10 @@ class OmniPage<S extends OmniScreen> extends GoRoute {
 
   /// Overrides `OmniApp(pageType:)` for this route.
   final OmniPageType? pageType;
+
+  /// Guards that run before this route is shown. Their `refresh` streams
+  /// are listened to by `OmniApp`, like app-wide guards.
+  final List<OmniGuard> guards;
 
   /// The screen type; used by `OmniRoute.to<S>()`.
   Type get screenType => S;

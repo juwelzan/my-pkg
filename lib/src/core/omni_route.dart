@@ -96,6 +96,31 @@ abstract final class OmniRoute {
   /// Whether there is a page to pop.
   static bool canPop() => router.canPop();
 
+  /// [pop] if there is a page to pop; returns whether it popped. Safe to
+  /// call on the first page, where [pop] would throw.
+  static bool maybePop<T extends Object?>([T? result]) {
+    if (!router.canPop()) return false;
+    router.pop<T>(result);
+    return true;
+  }
+
+  /// Re-run redirects and guards for the current location, e.g. after
+  /// state they read has changed without a guard refresh stream.
+  static void refresh() => router.refresh();
+
+  /// Replace the top page with the route named [name].
+  static void replaceNamed(
+    String name, {
+    Map<String, String> path = const {},
+    Map<String, dynamic> query = const {},
+    Object? extra,
+  }) => router.pushReplacementNamed(
+    name,
+    pathParameters: path,
+    queryParameters: query,
+    extra: extra,
+  );
+
   /// [go] to the route named [name].
   static void goNamed(
     String name, {
@@ -134,6 +159,16 @@ abstract final class OmniRoute {
       query: query,
     );
   }
+
+  /// [replace] the top page with the route that builds screen [S].
+  static void replaceTo<S extends OmniScreen>({
+    Map<String, String> path = const {},
+    Map<String, String> query = const {},
+    Object? extra,
+  }) => replace(
+    locationOf<S>(path: path, query: query),
+    extra: extra,
+  );
 
   /// [go] to the route that builds screen [S].
   static void to<S extends OmniScreen>({

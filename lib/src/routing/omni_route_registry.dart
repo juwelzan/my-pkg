@@ -2,6 +2,7 @@ import 'package:go_router/go_router.dart';
 import 'package:meta/meta.dart';
 
 import '../errors/omni_route_exception.dart';
+import '../guards/omni_guard.dart';
 import 'omni_page.dart';
 import 'omni_path.dart';
 
@@ -34,6 +35,7 @@ class OmniRouteRegistry {
             names[name] = full;
           }
           if (r is OmniPage) {
+            routeGuards.addAll(r.guards);
             _byType.update(r.screenType, (_) => null, ifAbsent: () => full);
           }
           nextParent = full;
@@ -52,11 +54,18 @@ class OmniRouteRegistry {
   final Map<Type, String?> _byType = {};
   late final List<String> paths;
 
+  /// Guards declared on individual routes, in tree order.
+  final List<OmniGuard> routeGuards = [];
+
   String pathFor(Type screen) {
     if (!_byType.containsKey(screen)) {
       throw OmniRouteException(
         OmniErrorCode.missingRoute,
         'No OmniPage builds $screen.',
+        hint:
+            'Add OmniPage(..., (_) => $screen(...)). If your routes are in a '
+            'List<OmniPage>, Dart infers OmniPage<OmniScreen> and loses the '
+            'screen type: use List<RouteBase> or write OmniPage<$screen>(...).',
       );
     }
     return _byType[screen] ??

@@ -50,7 +50,7 @@ pushes, and closed when the page is popped or replaced.
 
 ```yaml
 dependencies:
-  omni_route: ^0.2.0
+  omni_route: ^0.2.1
   flutter_bloc: ^9.1.1   # for context.read / BlocBuilder in your code
   go_router: ^18.1.4     # only if you use go_router types directly
 ```
@@ -243,9 +243,13 @@ OmniRoute.push('/students/101');              // push
 final saved = await OmniRoute.push<bool>('/students/101/edit');
 OmniRoute.pop(true);                          // pop with a result
 OmniRoute.replace('/login');                  // replace the top page
+OmniRoute.maybePop();                         // pop if possible; false on the first page
+OmniRoute.refresh();                          // re-run guards for the current page
 OmniRoute.goNamed('students');
+OmniRoute.replaceNamed('login');
 OmniRoute.to<StudentDetailScreen>(path: {'id': '101'}, query: {'tab': 'info'});
 OmniRoute.pushTo<StudentDetailScreen, bool>(path: {'id': '101'});
+OmniRoute.replaceTo<LoginScreen>();
 OmniRoute.location;                           // current Uri
 OmniRoute.router;                             // the GoRouter, for anything else
 ```
@@ -275,7 +279,8 @@ OmniPage('/attendance/daily', (p) => AttendanceScreen(
 ));
 ```
 
-`OmniParams`: `path`, `pathInt`, `query`, `queryInt`, `queryAll`,
+`OmniParams`: `path`, `pathInt`, `query`, `queryInt`, `queryDouble`,
+`queryBool` (`true/false/1/0`), `queryEnum(name, Sort.values)`, `queryAll`,
 `extra<T>()`, `uri`, `state`. Values are already URL-decoded. An invalid
 value (e.g. `/students/abc` for `pathInt`) shows the not-found page instead
 of crashing.
@@ -502,6 +507,7 @@ are created again (persist their data yourself).
 | `duplicateRoute` | two routes match the same URLs |
 | `notInitialized: No OmniApp is mounted` | navigate after `OmniApp` is built, or use `context.go` |
 | `X is used by several routes` | navigate by path or `goNamed` |
+| `No OmniPage builds X` but it is registered | routes in a `List<OmniPage>` lose the screen type: use `List<RouteBase>` or `OmniPage<X>(...)` |
 | 404 after refreshing on the web | configure the server fallback (§18) |
 | No page transition on a raw `GoRoute` | use `OmniPage` or give it a `pageBuilder` |
 | Route changes ignored after hot reload | hot restart |

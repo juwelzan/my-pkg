@@ -1,3 +1,19 @@
+## 0.2.1
+
+No API changes; all 0.2.0 code keeps compiling and behaving the same,
+except for the two bug fixes below.
+
+- Fix: guards passed to `OmniPage(guards:)` now re-run when their `refresh`
+  stream emits (only `OmniApp(guards:)` were listened to). A guard object
+  shared by several routes is subscribed once.
+- Fix: `onNavigate` now reports a new page at the same location (pushing
+  the same URL twice, popping back to it). Re-going to the current page
+  still reports nothing.
+- New: `OmniParams.queryBool`, `queryDouble`, `queryEnum`.
+- New: `OmniRoute.maybePop`, `refresh`, `replaceTo<S>`, `replaceNamed`.
+- Better error: `missingRoute` explains the `List<OmniPage>` type-inference
+  trap that hides a route's screen type.
+
 ## 0.2.0
 
 - Fix: a stateless screen shown outside a route now creates its own

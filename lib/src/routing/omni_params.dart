@@ -46,6 +46,37 @@ class OmniParams {
     return v == null ? null : _int(name, v);
   }
 
+  /// Optional query parameter parsed as double (`?lat=23.8`). Present but
+  /// not a number → error page.
+  double? queryDouble(String name) {
+    final v = query(name);
+    if (v == null) return null;
+    return double.tryParse(v) ?? _fail(name, '"$v" is not a number');
+  }
+
+  /// Optional query parameter parsed as bool: `true`/`false`/`1`/`0`
+  /// (case-insensitive). Anything else → error page.
+  bool? queryBool(String name) {
+    final v = query(name)?.toLowerCase();
+    return switch (v) {
+      null => null,
+      'true' || '1' => true,
+      'false' || '0' => false,
+      _ => _fail(name, '"$v" is not true/false'),
+    };
+  }
+
+  /// Optional query parameter matched by name against [values]
+  /// (`?sort=newest` with `Sort.values`). Unknown name → error page.
+  T? queryEnum<T extends Enum>(String name, List<T> values) {
+    final v = query(name);
+    if (v == null) return null;
+    for (final e in values) {
+      if (e.name == v) return e;
+    }
+    _fail(name, '"$v" is not one of ${values.map((e) => e.name).join(', ')}');
+  }
+
   /// All values of a repeated query parameter (`?tag=a&tag=b`).
   List<String> queryAll(String name) =>
       state.uri.queryParametersAll[name] ?? const [];

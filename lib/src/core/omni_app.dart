@@ -124,6 +124,7 @@ class OmniApp extends StatefulWidget {
 
 class _OmniAppState extends State<OmniApp> {
   late final OmniBlocRegistry _blocs;
+  List<OmniGuard> _refreshGuards = const [];
   GoRouter? _router;
   Object? _configError;
   final GuardNotifier _guardRefresh = GuardNotifier();
@@ -134,6 +135,9 @@ class _OmniAppState extends State<OmniApp> {
     try {
       _blocs = OmniBlocRegistry(widget.blocs);
       final registry = OmniRouteRegistry(widget.routes);
+      // Route-level guards re-run on their refresh streams too.
+      // A guard object shared by several routes is subscribed once.
+      _refreshGuards = {...widget.guards, ...registry.routeGuards}.toList();
       final onError = widget.notFound ?? defaultOmniErrorBuilder;
       final router = _router = GoRouter(
         routes: widget.routes,
@@ -173,11 +177,14 @@ class _OmniAppState extends State<OmniApp> {
 
   OmniRouteEntry? _last;
   Uri? _lastUri;
+  LocalKey? _lastPageKey;
 
   void _navigated() {
     final router = _router!;
     final state = router.state;
-    if (state.uri == _lastUri) return;
+    // Same page and same URI = nothing changed. A new page at the same
+    // location (pushed twice, or popped back to) has a new pageKey.
+    if (state.uri == _lastUri && state.pageKey == _lastPageKey) return;
     final top = state.topRoute;
     final to = top == null
         ? OmniRouteEntry(location: state.matchedLocation, name: state.name)
@@ -185,6 +192,7 @@ class _OmniAppState extends State<OmniApp> {
     final event = OmniNavigation(from: _last, to: to, uri: state.uri);
     _last = to;
     _lastUri = state.uri;
+    _lastPageKey = state.pageKey;
     if (widget.logNavigation && kDebugMode) debugPrint('[OmniRoute] $event');
     widget.onNavigate?.call(event);
   }
@@ -214,7 +222,7 @@ class _OmniAppState extends State<OmniApp> {
       child: OmniGlobalBlocScope(
         registry: _blocs,
         child: GuardRefresh(
-          guards: widget.guards,
+          guards: _refreshGuards,
           notifier: _guardRefresh,
           child: Builder(
             builder: (c) => widget.desktopBack
