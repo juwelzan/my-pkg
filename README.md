@@ -1,71 +1,78 @@
 # OmniRoute
 
-Simple screens, routes and Bloc scoping for Flutter — built **on**
-[go_router](https://pub.dev/packages/go_router) and
-[flutter_bloc](https://pub.dev/packages/flutter_bloc), not instead of them.
+**GoRouter আর flutter_bloc-এর উপর তৈরি — সহজ Screen, Route আর Bloc ব্যবস্থাপনা।**
 
-OmniRoute has no navigation engine and no state management of its own.
-`OmniPage` *is* a `GoRoute`, the router *is* a `GoRouter`, and Blocs live in
-plain `BlocProvider`s. OmniRoute removes the wiring between them.
+OmniRoute নিজে কোনো নতুন Navigation Engine বা State Management নয়।
+ভিতরে সব কাজ করে [go_router](https://pub.dev/packages/go_router) (navigation)
+আর [flutter_bloc](https://pub.dev/packages/flutter_bloc) (Bloc)।
+OmniRoute শুধু এদের মধ্যে যে বারবার লেখা "জোড়া লাগানোর কোড" লাগে, সেটা সরিয়ে দেয়।
 
-Architecture, lifecycle and Bloc ownership: [doc/architecture.md](doc/architecture.md).
-Upgrading from 0.1: [doc/migration.md](doc/migration.md).
+- `OmniPage` আসলে একটা সাধারণ `GoRoute`
+- Router আসলে একটা সাধারণ `GoRouter`
+- প্রতিটা Bloc থাকে একটা সাধারণ `BlocProvider`-এ
 
-## 1. Introduction
+তাই go_router বা flutter_bloc-এর যেকোনো ফিচার আগের মতোই ব্যবহার করা যায়।
 
-```dart
-class StudentScreen extends OmniStatelessWidget {
-  const StudentScreen({super.key});
+> আরও গভীরে: [doc/architecture.md](doc/architecture.md) (ভিতরের গঠন, lifecycle, Bloc ownership),
+> [doc/web.md](doc/web.md) (Web hosting), [doc/platforms.md](doc/platforms.md) (Android/iOS/Desktop),
+> [doc/migration.md](doc/migration.md) (পুরনো version থেকে আপগ্রেড)।
+> (এই ডকুমেন্টগুলো ইংরেজিতে।)
 
-  @override
-  String get screenName => 'Students';
+---
 
-  @override
-  List<Provide> get provide => const [Provide<StudentBloc>()];
+## সূচিপত্র
 
-  @override
-  Widget build(BuildContext context) => const StudentList();
-}
-```
+1. [ইনস্টলেশন](#১-ইনস্টলেশন)
+2. [৫ মিনিটে শুরু](#২-৫-মিনিটে-শুরু)
+3. [কোন API কী কাজে — এক নজরে](#৩-কোন-api-কী-কাজে--এক-নজরে)
+4. [OmniApp — অ্যাপের মূল](#৪-omniapp--অ্যাপের-মূল)
+5. [Screen তৈরি](#৫-screen-তৈরি)
+6. [Route রেজিস্টার — OmniPage](#৬-route-রেজিস্টার--omnipage)
+7. [Route Parameter — OmniParams](#৭-route-parameter--omniparams)
+8. [Navigation — OmniRoute](#৮-navigation--omniroute)
+9. [Bloc — কোথায় কোনটা](#৯-bloc--কোথায়-কোনটা)
+10. [Shell ও Tab — OmniShell / OmniStatefulShell](#১০-shell-ও-tab)
+11. [Route Group — কয়েকটা Route একই Bloc ভাগ করে](#১১-route-group)
+12. [Guard — Login, Role, Permission](#১২-guard--login-role-permission)
+13. [Lifecycle Hook — OmniLifecycle](#১৩-lifecycle-hook--omnilifecycle)
+14. [Route-এর বাইরে Screen — OmniScreenHost](#১৪-route-এর-বাইরে-screen--omniscreenhost)
+15. [Web — পরিষ্কার URL](#১৫-web--পরিষ্কার-url)
+16. [Deep Link](#১৬-deep-link)
+17. [Platform সেটিং — Page Transition, Desktop Back, Restoration](#১৭-platform-সেটিং)
+18. [Debugging ও Analytics](#১৮-debugging-ও-analytics)
+19. [Error ও সমাধান](#১৯-error-ও-সমাধান)
+20. [সম্পূর্ণ উদাহরণ](#২০-সম্পূর্ণ-উদাহরণ)
 
-The `StudentBloc` is created when the page opens, kept across rebuilds and
-pushes, and closed when the page is popped or replaced.
+---
 
-## 2. Features
-
-- `OmniStatelessWidget` / `OmniStatefulWidget` with the same API
-- One `OmniApp` creating a single `GoRouter`
-- Global, route-group, shell, page and screen-scoped Blocs — single or multiple, or existing instances
-- Typed navigation (`OmniRoute.to<StudentDetailScreen>(...)`) plus all go_router navigation
-- Typed route parameters, nested routes, shell and stateful shell routes
-- Guards (sync or async, app-wide or per route) that re-run when a Bloc changes
-- Clean web URLs, browser titles, trailing-slash cleanup
-- Desktop back shortcuts and mouse back button
-- State restoration of the route stack
-- Lifecycle hooks (`OmniLifecycle`): app resume/pause, screen visible/hidden, system changes
-- Route metadata, `OmniRoute.current` / `.stack`, `onNavigate` hook, debug logging
-- Validated configuration with clear errors
-- Leak-tracked tests; profile-mode benchmark against plain go_router
-
-## 3. Installation
+## ১. ইনস্টলেশন
 
 ```yaml
 dependencies:
   omni_route: ^0.2.2
-  flutter_bloc: ^9.1.1   # for context.read / BlocBuilder in your code
-  go_router: ^18.1.4     # only if you use go_router types directly
+  flutter_bloc: ^9.1.1   # context.read / BlocBuilder ব্যবহারের জন্য
+  go_router: ^18.1.4     # go_router-এর type (যেমন GoRouterState) সরাসরি লাগলে
 ```
 
-Requires Dart ≥ 3.12 and Flutter ≥ 3.44 (go_router 18's minimum).
+প্রয়োজন: Dart ≥ 3.12, Flutter ≥ 3.44।
 
-## 4. Quick start
+```dart
+import 'package:omni_route/omni_route.dart';
+```
+
+---
+
+## ২. ৫ মিনিটে শুরু
 
 ```dart
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:omni_route/omni_route.dart';
 
 void main() {
-  OmniRoute.usePathUrls(); // web: /students instead of /#/students
+  // Web-এ /#/students নয়, পরিষ্কার /students URL দেখাবে।
+  // অবশ্যই runApp-এর আগে ডাকতে হবে। Android/iOS-এ এটা কিছুই করে না।
+  OmniRoute.usePathUrls();
   runApp(const MyApp());
 }
 
@@ -74,64 +81,158 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => OmniApp(
+        // অ্যাপ খুললে প্রথমে কোন পেজ দেখাবে।
         initialRoute: '/students',
+
+        // Bloc কীভাবে তৈরি হবে — একবারই এখানে বলে দিন।
         blocs: [
+          // global: true → পুরো অ্যাপের জন্য একটাই instance।
           OmniBloc<AuthBloc>((_) => AuthBloc(), global: true),
-          OmniBloc<StudentBloc>((ctx) => StudentBloc(ctx.read<StudentRepo>())),
+          // global না → যে screen চাইবে, তার জন্য নতুন instance।
+          OmniBloc<StudentBloc>((_) => StudentBloc()),
         ],
+
+        // Route টেবিল: কোন URL-এ কোন screen।
         routes: [
           OmniPage('/students', (_) => const StudentScreen(), routes: [
+            // '/students/:id' — child path-এ সামনে '/' থাকে না।
             OmniPage(':id', (p) => StudentDetailScreen(id: p.pathInt('id'))),
           ]),
         ],
+
+        // আপনার MaterialApp — OmniApp শুধু router-টা দেয়।
         builder: (context, router) => MaterialApp.router(routerConfig: router),
       );
 }
+
+class StudentScreen extends OmniStatelessWidget {
+  const StudentScreen({super.key});
+
+  // বাধ্যতামূলক: মানুষের পড়ার মতো নাম (log আর browser title-এ ব্যবহার হয়)।
+  @override
+  String get screenName => 'Students';
+
+  // এই screen-এর নিজস্ব Bloc। পেজ খুললে তৈরি, pop করলে বন্ধ — নিজে থেকেই।
+  @override
+  List<Provide> get provide => const [Provide<StudentBloc>()];
+
+  @override
+  Widget build(BuildContext context) {
+    final students = context.watch<StudentBloc>().state; // সাধারণ flutter_bloc
+    return Scaffold(
+      body: ListView(children: [
+        for (final s in students)
+          ListTile(
+            title: Text(s.name),
+            // Type দিয়ে navigation — URL string ভুল লেখার ঝুঁকি নেই।
+            onTap: () => OmniRoute.to<StudentDetailScreen>(path: {'id': '${s.id}'}),
+          ),
+      ]),
+    );
+  }
+}
 ```
 
-## 5. Screen creation
+---
 
-A screen is a widget with a `screenName` (required, used for logs and the
-browser title) and optionally a list of Blocs. Its URL is **not** part of
-the screen: it is declared once, in the route table (§8). That way screens
-that need constructor arguments (`StudentDetailScreen(id: 101)`) work the
-same way as screens that don't.
+## ৩. কোন API কী কাজে — এক নজরে
 
-| Member | Required | Meaning |
-|---|---|---|
-| `screenName` | yes | Human-readable name; must not be empty |
-| `title` | no | Browser/app-switcher title, defaults to `screenName` |
-| `provide` | no | Blocs for this screen (§10–12) |
-| `name` | — | Runtime class name, for debugging only (not stable under obfuscation) |
-| `metadata` | — | `OmniScreenMetadata` (identity is the Dart `Type`) |
+| আপনি যা করতে চান | যেটা ব্যবহার করবেন |
+|---|---|
+| অ্যাপ সেটআপ (router, Bloc, guard একসাথে) | `OmniApp` |
+| সাধারণ (state ছাড়া) screen | `OmniStatelessWidget` |
+| state সহ screen (`setState`, controller) | `OmniStatefulWidget` + `OmniState` |
+| একটা URL-এ একটা screen | `OmniPage` |
+| URL থেকে id, query পড়া | `OmniParams` (`p.pathInt('id')`, `p.query('tab')`) |
+| অন্য পেজে যাওয়া / ফেরা | `OmniRoute.go / push / pop / to<Screen>()` |
+| Bloc কীভাবে তৈরি হবে বলে দেওয়া | `OmniBloc<B>(...)` (`OmniApp(blocs:)`-এ) |
+| পুরো অ্যাপের Bloc (auth, theme) | `OmniBloc<B>(..., global: true)` |
+| শুধু এক screen-এর Bloc | screen-এর `provide => [Provide<B>()]` |
+| route parameter দিয়ে Bloc বানানো | `Provide<B>.create((c) => B(...))` |
+| আগে থেকে তৈরি Bloc দেওয়া (OmniRoute বন্ধ করবে না) | `Provide.value(bloc)` |
+| কয়েকটা route একই Bloc ভাগ করবে (detail + edit) | `OmniRouteGroup` |
+| সব child route-এর চারপাশে একই layout | `OmniShell` |
+| Bottom navigation / tab, প্রতিটা tab নিজের stack রাখবে | `OmniStatefulShell` |
+| Login ছাড়া ঢুকতে না দেওয়া, role check | `OmniGuard` |
+| App resume/pause, screen দেখা যাচ্ছে কি না | `OmniLifecycle` mixin |
+| Route ছাড়া (layout-এর ভিতরে) stateful screen বসানো | `OmniScreenHost` |
+| Web-এ `#` ছাড়া URL | `OmniRoute.usePathUrls()` |
+| Analytics / screen view tracking | `OmniApp(onNavigate:)` |
+| এখন কোন পেজে আছি / পুরো stack | `OmniRoute.current`, `OmniRoute.stack` |
 
-**Screens outside routes.** A screen can also be placed directly in a
-layout (master–detail pane, dialog). Stateless screens then create their own
-`provide` Blocs; wrap stateful ones in `OmniScreenHost`:
+---
+
+## ৪. OmniApp — অ্যাপের মূল
+
+`OmniApp` একবারই `GoRouter` তৈরি করে, global Bloc গুলো সবার উপরে রাখে, আর আপনার
+`MaterialApp.router`-কে router-টা দিয়ে দেয়। আপনার `MaterialApp` পুরোপুরি আপনার নিয়ন্ত্রণে থাকে।
 
 ```dart
-Row(children: [
-  const Expanded(child: StudentListScreen()),                 // stateless: automatic
-  Expanded(child: OmniScreenHost(screen: DashboardScreen())), // stateful: wrap
-])
+OmniApp(
+  // ── বাধ্যতামূলক ─────────────────────────────────────────
+  routes: [ /* OmniPage, OmniShell, ... আর সাধারণ GoRoute-ও চলে */ ],
+  builder: (context, router) => MaterialApp.router(
+    routerConfig: router,      // ← এটা দিতেই হবে
+    theme: ThemeData(...),     // বাকি সব আপনার মতো
+  ),
+
+  // ── ঐচ্ছিক ───────────────────────────────────────────────
+  initialRoute: '/',            // শুরুর পেজ (deep link না থাকলে)
+  blocs: [ /* OmniBloc<...> */ ], // Bloc factory আর global Bloc
+  guards: [ /* OmniGuard */ ],    // সব route-এ চলবে এমন guard
+  notFound: (context, state, error) => const NotFoundScreen(), // ভুল URL-এর পেজ
+
+  pageType: OmniPages.material, // page transition (৯ম অংশে বিস্তারিত)
+  setTitles: true,              // browser tab-এ screen-এর title বসাবে
+  desktopBack: true,            // Desktop-এ Alt+← / Cmd+[ / mouse back
+  escapeGoesBack: false,        // Desktop-এ Esc চাপলে back
+  restorationScopeId: null,     // state restoration চালু করতে একটা id দিন
+
+  onNavigate: (nav) {},         // প্রতিটা navigation-এর পর ডাকা হয় (analytics)
+  logNavigation: false,         // true দিলে debug build-এ প্রতিটা navigation print হবে
+
+  // সরাসরি GoRouter-এ যায় (প্রয়োজন হলে):
+  redirect: null, redirectLimit: 5, refreshListenable: null,
+  navigatorKey: null, observers: null, debugLogDiagnostics: false,
+)
 ```
 
-## 6. Stateless screen
+> ⚠️ `OmniApp`-এর setting একবারই পড়া হয় (`initState`-এ)। Route বা Bloc বদলালে
+> **hot restart** দিন, hot reload যথেষ্ট নয় — `GoRouter` নিজেও এভাবেই কাজ করে।
+
+**ভুল configuration:** কোনো path ভুল হলে, একই route দুবার থাকলে বা একই Bloc দুবার register করলে
+অ্যাপ শুরুতেই পরিষ্কার error দেখাবে — পরে কোনো এক অজানা মুহূর্তে crash হবে না।
+
+---
+
+## ৫. Screen তৈরি
+
+দুই ধরনের screen-এর API একদম একই রকম।
+
+### Stateless Screen
 
 ```dart
 class ProfileScreen extends OmniStatelessWidget {
   const ProfileScreen({super.key});
 
+  // বাধ্যতামূলক। খালি হলে error।
   @override
   String get screenName => 'Profile';
 
+  // ঐচ্ছিক: browser tab / app switcher-এর title। না দিলে screenName।
   @override
-  Widget build(BuildContext context) =>
-      Scaffold(appBar: AppBar(title: Text(screenName)));
+  String get title => 'আমার প্রোফাইল';
+
+  // ঐচ্ছিক: এই screen-এর Bloc (৯ম অংশ)।
+  @override
+  List<Provide> get provide => const [Provide<ProfileBloc>()];
+
+  @override
+  Widget build(BuildContext context) => const Scaffold(body: Text('Profile'));
 }
 ```
 
-## 7. Stateful screen
+### Stateful Screen
 
 ```dart
 class DashboardScreen extends OmniStatefulWidget {
@@ -141,37 +242,413 @@ class DashboardScreen extends OmniStatefulWidget {
   String get screenName => 'Dashboard';
 
   @override
+  List<Provide> get provide => const [Provide<StatsBloc>()];
+
+  @override
   State<DashboardScreen> createState() => _DashboardState();
 }
 
+// State-এর জায়গায় OmniState — বাকি সব সাধারণ Flutter State-এর মতো।
 class _DashboardState extends OmniState<DashboardScreen> {
+  late final StatsBloc stats;
+
   @override
   void initState() {
     super.initState();
-    // Screen Blocs already exist here: context.read<StatsBloc>()
+    // screen-এর Bloc initState-এই পাওয়া যায় — কারণ OmniRoute Bloc গুলো
+    // screen-এর উপরে বসায়।
+    stats = context.read<StatsBloc>();
   }
 
   @override
-  Widget build(BuildContext context) =>
-      Text('${widget.screenName} at ${routeState.uri}');
+  Widget build(BuildContext context) {
+    // metadata   → screen-এর নাম, title, type
+    // routeState → GoRouterState (path, query, extra)
+    return Text('${widget.screenName} — ${routeState.uri}');
+  }
 }
 ```
 
-`OmniState` is a normal `State`: `initState`, `didChangeDependencies`,
-`didUpdateWidget` and `dispose` behave exactly as in Flutter. It adds
-`metadata` and `routeState` (the `GoRouterState`).
+| Member | কোথায় | কাজ |
+|---|---|---|
+| `screenName` | দুটোতেই (বাধ্যতামূলক) | screen-এর নাম; log, title-এ ব্যবহার |
+| `title` | দুটোতেই | browser tab-এর title (default `screenName`) |
+| `provide` | দুটোতেই | এই screen-এর Bloc তালিকা |
+| `name` | দুটোতেই | class-এর নাম — **শুধু debug-এর জন্য** (release obfuscation-এ বদলে যায়) |
+| `metadata` | দুটোতেই / `OmniState` | `OmniScreenMetadata` (type, screenName, title) |
+| `routeState` | `OmniState` | বর্তমান `GoRouterState` |
 
-### Lifecycle hooks (both screen types)
+> Screen-এর ভিতরে URL লেখা থাকে না। URL থাকে route টেবিলে (`OmniPage`)।
+> এতে `StudentDetailScreen(id: 101)`-এর মতো argument-ওয়ালা screen-ও সহজে route-এ বসে।
 
-Add `with OmniLifecycle` and override only what you need — no
-`WidgetsBindingObserver`, no `addObserver`/`removeObserver`:
+---
+
+## ৬. Route রেজিস্টার — OmniPage
 
 ```dart
+routes: [
+  // সাধারণ route
+  OmniPage('/dashboard', (_) => const DashboardScreen()),
+
+  // nested route: /students আর /students/:id
+  OmniPage(
+    '/students',
+    (_) => const StudentScreen(),
+    name: 'students',                       // ঐচ্ছিক: নাম দিয়ে navigation (goNamed)
+    metadata: const {'section': 'school'},  // ঐচ্ছিক: নিজের তথ্য (guard, analytics)
+    routes: [
+      OmniPage(':id', (p) => StudentDetailScreen(id: p.pathInt('id'))),
+      OmniPage(':id/edit', (p) => StudentEditScreen(id: p.pathInt('id'))),
+    ],
+  ),
+
+  // শুধু এই route-এর guard (১২তম অংশ)
+  OmniPage('/admin', (_) => const AdminScreen(), guards: [adminGuard]),
+
+  // শুধু এই route-এর transition (১৭তম অংশ)
+  OmniPage('/popup', (_) => const PopupScreen(), pageType: OmniPages.none),
+
+  // সাধারণ go_router route-ও মিশিয়ে ব্যবহার করা যায়
+  GoRoute(path: '/legacy', builder: (_, _) => const LegacyPage()),
+]
+```
+
+**Path-এর নিয়ম** (ভুল হলে অ্যাপ শুরুতেই error):
+
+| নিয়ম | ঠিক | ভুল |
+|---|---|---|
+| top-level path `/` দিয়ে শুরু | `/students` | `students` |
+| child path `/` ছাড়া | `':id'`, `'edit'` | `'/edit'` |
+| ছোট হাতের অক্ষর | `/students` | `/Students` |
+| শেষে `/` নয় | `/students` | `/students/` |
+| `#`, `?`, `//` নয় | `/a/b` | `/a//b`, `/a?x=1` |
+| parameter: `:নাম` | `:id`, `:userId` | `:1d` |
+| একই URL দুবার নয় | — | `/a/:id` আর `/a/:slug` একসাথে |
+| একই `name` দুবার নয় | — | দুটো route-এর `name: 'x'` |
+
+> ⚠️ **Route list-এর type:** route গুলো `List<OmniPage>` টাইপের ভেরিয়েবলে রাখলে Dart
+> screen-এর type হারিয়ে ফেলে, আর `OmniRoute.to<Screen>()` route খুঁজে পায় না।
+> `List<RouteBase>` ব্যবহার করুন (অথবা `OmniPage<MyScreen>(...)` লিখুন)।
+>
+> ```dart
+> final List<RouteBase> studentRoutes = [ OmniPage(...), OmniPage(...) ]; // ✅
+> ```
+
+---
+
+## ৭. Route Parameter — OmniParams
+
+`OmniPage`-এর builder-এ `p` হলো `OmniParams` — URL থেকে মান পড়ার সহজ উপায়।
+সব মান আগে থেকেই decode করা থাকে।
+
+```dart
+// URL: /attendance/10?section=A&date=2026-11-15&late=true&sort=newest&tag=x&tag=y
+OmniPage('/attendance/:class', (p) => AttendanceScreen(
+  classNo:  p.pathInt('class'),             // 10      — path parameter (int)
+  section:  p.query('section'),             // 'A'     — query (String?, না থাকলে null)
+  page:     p.queryInt('page'),             // null    — query (int?)
+  lateOnly: p.queryBool('late'),            // true    — true/false/1/0
+  minScore: p.queryDouble('min'),           // null    — query (double?)
+  sort:     p.queryEnum('sort', Sort.values), // Sort.newest — enum নাম দিয়ে
+  tags:     p.queryAll('tag'),              // ['x','y'] — একই query একাধিকবার
+  student:  p.extra<Student>(),             // push-এর সময় পাঠানো object
+));
+```
+
+| Method | ফেরত দেয় | না থাকলে | ভুল মান হলে |
+|---|---|---|---|
+| `path(name)` | `String` | error page | — |
+| `pathInt(name)` | `int` | error page | error page |
+| `query(name)` | `String?` | `null` | — |
+| `queryInt / queryDouble / queryBool` | `int? / double? / bool?` | `null` | error page |
+| `queryEnum(name, values)` | `T?` | `null` | error page |
+| `queryAll(name)` | `List<String>` | `[]` | — |
+| `extra<T>()` | `T?` | `null` | error page |
+| `uri` / `state` | পুরো `Uri` / `GoRouterState` | — | — |
+
+> ভুল মান (যেমন `/students/abc`-এ `pathInt`) অ্যাপ crash করায় না — not-found পেজ দেখায়।
+
+**Bloc factory বা `initState`-এ parameter লাগলে:** `OmniParams.of(context)`
+(এটা subscribe করে না, তাই সেখানে নিরাপদ):
+
+```dart
+Provide<StudentBloc>.create(
+  (context) => StudentBloc(OmniParams.of(context).pathInt('id')),
+)
+```
+
+> ⚠️ `extra` URL-এ থাকে না — Web-এ refresh করলে হারিয়ে যায়।
+> refresh-এর পরেও যা লাগবে, তা path বা query-তে রাখুন। গোপন তথ্য (token, password) কখনো URL-এ নয়।
+
+---
+
+## ৮. Navigation — OmniRoute
+
+`OmniRoute`-এর সব method সরাসরি অ্যাপের `GoRouter`-এ যায়।
+go_router-এর `context.go(...)`, `context.push(...)`-ও আগের মতো চলে।
+
+```dart
+// ── URL দিয়ে ─────────────────────────────────────────────
+OmniRoute.go('/students/101?tab=info'); // পুরো stack বদলে এখানে যাও ("clear and go")
+OmniRoute.push('/students/101');         // উপরে নতুন পেজ (back দিলে আগেরটায় ফিরবে)
+OmniRoute.replace('/login');             // উপরের পেজটা বদলে দাও
+OmniRoute.pop();                         // উপরের পেজ বন্ধ
+OmniRoute.maybePop();                    // pop করা গেলে করবে, না গেলে false (crash নয়)
+OmniRoute.canPop();                      // pop করা যাবে কি না
+
+// ── ফলাফল ফেরত পাওয়া ───────────────────────────────────
+final saved = await OmniRoute.push<bool>('/students/101/edit');
+// edit পেজে: OmniRoute.pop(true);
+
+// ── Screen-এর Type দিয়ে (string ছাড়া, refactor-safe) ────────
+OmniRoute.to<StudentDetailScreen>(path: {'id': '101'}, query: {'tab': 'info'}); // go
+OmniRoute.pushTo<StudentDetailScreen, bool>(path: {'id': '101'});               // push
+OmniRoute.replaceTo<LoginScreen>();                                            // replace
+OmniRoute.locationOf<StudentDetailScreen>(path: {'id': '101'}); // '/students/101'
+
+// ── Route-এর নাম দিয়ে ───────────────────────────────────
+OmniRoute.goNamed('students');
+OmniRoute.pushNamed('student', path: {'id': '101'});
+OmniRoute.replaceNamed('login');
+
+// ── অন্যান্য ─────────────────────────────────────────────
+OmniRoute.refresh();   // বর্তমান পেজের guard আবার চালাও
+OmniRoute.location;    // এখনকার URL (push করা পেজ সহ)
+OmniRoute.router;      // আসল GoRouter — বাকি সব কাজের জন্য
+```
+
+| কখন কোনটা | |
+|---|---|
+| Menu / tab থেকে অন্য অংশে যাওয়া | `go` |
+| তালিকা থেকে detail খোলা (back-এ ফিরবে) | `push` |
+| Login সফল হলে login পেজ সরিয়ে home | `go` বা `replace` |
+| Form থেকে ফলাফল নিয়ে ফেরা | `push<T>` + `pop(result)` |
+| প্রথম পেজে back বাটন (crash এড়াতে) | `maybePop` |
+
+> একাধিক `OmniApp` একসাথে থাকলে (যেমন desktop-এর কয়েকটা window) `OmniRoute.*` সবশেষে
+> চালু হওয়া অ্যাপে কাজ করে। অন্যটার ভিতর থেকে `context.go(...)` ব্যবহার করুন।
+
+---
+
+## ৯. Bloc — কোথায় কোনটা
+
+### ধাপ ১: Factory একবার register করুন
+
+Dart-এ reflection নেই, তাই শুধু type দেখে Bloc বানানো যায় না —
+একবার বলে দিতে হয় কীভাবে বানাবে:
+
+```dart
+OmniApp(
+  blocs: [
+    // পুরো অ্যাপের জন্য একটাই (login, theme)
+    OmniBloc<AuthBloc>((_) => AuthBloc(), global: true, lazy: false),
+    OmniBloc<ThemeBloc>((_) => ThemeBloc(), global: true),
+
+    // screen-গুলোর জন্য factory — dependency context থেকে
+    OmniBloc<StudentBloc>((context) => StudentBloc(context.read<StudentRepository>())),
+    OmniBloc<AttendanceBloc>((_) => AttendanceBloc()),
+  ],
+  ...
+)
+```
+
+- `global: true` → অ্যাপ চালু থাকা পর্যন্ত বাঁচে; সব জায়গা থেকে `context.read<AuthBloc>()`।
+- `lazy: false` → প্রথমেই তৈরি হবে (না দিলে প্রথম ব্যবহারের সময়)।
+- শুধু `Bloc` চলে (Cubit দিলে compile হবে না)।
+
+### ধাপ ২: Screen-এ শুধু type বলুন
+
+```dart
+// একটা Bloc
+@override
+List<Provide> get provide => const [Provide<StudentBloc>()];
+
+// একাধিক Bloc
+@override
+List<Provide> get provide => [
+  const Provide<StudentBloc>(),                                  // registry থেকে
+  Provide<StudentDetailBloc>.create((_) => StudentDetailBloc(id)), // নিজের factory (parameter সহ)
+  Provide.value(existingCartBloc),                               // আগে থেকে তৈরি — OmniRoute বন্ধ করবে না
+];
+```
+
+### কোনটা কতক্ষণ বাঁচে
+
+| ধরন | কোথায় লিখবেন | কখন তৈরি | কখন বন্ধ |
+|---|---|---|---|
+| Global | `OmniBloc(..., global: true)` | অ্যাপ শুরুতে / প্রথম ব্যবহারে | অ্যাপ বন্ধ হলে |
+| Route Group | `OmniRouteGroup(provide:)` | group-এর কোনো route-এ ঢুকলে | group থেকে বেরোলে |
+| Shell | `OmniShell(provide:)` | shell দেখালে | shell সরে গেলে |
+| Page | screen-এর `provide` | পেজ খুললে | পেজ pop / replace হলে |
+| Route-এর বাইরের Screen | screen-এর `provide` | screen বসালে | screen সরালে |
+| বাইরের | `Provide.value(bloc)` | আপনি | **কখনো OmniRoute বন্ধ করে না** |
+
+নিশ্চয়তা (সব test দিয়ে যাচাই করা):
+- rebuild হলে Bloc আবার তৈরি হয় না
+- উপরে নতুন পেজ push করলে নিচের পেজের Bloc বাঁচে
+- লুকানো tab-এর Bloc বাঁচে
+- প্রতিটা Bloc ঠিক একবার বন্ধ হয়
+- global Bloc কোনো screen আবার `Provide` করতে পারে না (করলে error)
+
+---
+
+## ১০. Shell ও Tab
+
+### OmniShell — কয়েকটা route-এর চারপাশে একই layout
+
+```dart
+OmniShell(
+  // shell যতক্ষণ দেখা যায়, ততক্ষণ এই Bloc বাঁচে
+  provide: const [Provide<InboxBloc>()],
+  // child = ভিতরের route-এর পেজ
+  builder: (context, state, child) => AppFrame(child: child),
+  routes: [
+    OmniPage('/inbox', (_) => const InboxScreen()),
+    OmniPage('/inbox/:id', (p) => MessageScreen(id: p.path('id'))),
+  ],
+),
+```
+
+### OmniStatefulShell — Bottom Navigation (প্রতিটা tab নিজের stack রাখে)
+
+```dart
+OmniStatefulShell(
+  builder: (context, state, shell) => Scaffold(
+    body: shell, // বর্তমান tab
+    bottomNavigationBar: NavigationBar(
+      selectedIndex: shell.currentIndex,
+      onDestinationSelected: shell.goBranch, // tab বদল
+      destinations: const [
+        NavigationDestination(icon: Icon(Icons.home), label: 'Home'),
+        NavigationDestination(icon: Icon(Icons.people), label: 'Students'),
+      ],
+    ),
+  ),
+  branches: [
+    StatefulShellBranch(routes: [OmniPage('/home', (_) => const HomeScreen())]),
+    StatefulShellBranch(routes: [OmniPage('/students', (_) => const StudentScreen())]),
+  ],
+),
+```
+
+tab বদলালে প্রতিটা tab-এর পেজের stack, scroll, `setState`-এর মান আর Bloc — সব থেকে যায়।
+
+---
+
+## ১১. Route Group
+
+Nested route গুলো আলাদা আলাদা পেজ — তাই `/students/7/edit` পেজ তার parent
+`/students/7`-এর Bloc পড়তে পারে না। একই Bloc কয়েকটা route-এ ভাগ করতে `OmniRouteGroup`:
+
+```dart
+OmniPage('/students', (_) => const StudentListScreen(), routes: [
+  OmniRouteGroup(
+    // id বদলালে (অন্য student) পুরনো Bloc বন্ধ হয়ে নতুন তৈরি হবে
+    scopeKey: (state) => state.pathParameters['id'],
+    provide: [
+      Provide<StudentBloc>.create(
+        (context) => StudentBloc(OmniParams.of(context).pathInt('id')),
+      ),
+    ],
+    routes: [
+      OmniPage(':id', (p) => StudentDetailScreen(id: p.pathInt('id')), routes: [
+        OmniPage('edit', (_) => const StudentEditScreen()), // একই StudentBloc
+      ]),
+    ],
+  ),
+]),
+```
+
+- group-এর কোনো route-এ ঢুকলে Bloc তৈরি
+- detail ↔ edit যাওয়া-আসায় একই instance
+- group-এর বাইরের পেজ উপরে push করলেও বাঁচে
+- group থেকে বেরোলে (`go('/students')`, back) বন্ধ
+
+---
+
+## ১২. Guard — Login, Role, Permission
+
+Guard ঠিক করে কোন পেজ দেখানো যাবে। `null` ফেরত = ঢুকতে দাও; একটা path ফেরত = সেখানে পাঠাও।
+
+### Login guard (পুরো অ্যাপে)
+
+```dart
+class AuthGuard extends OmniGuard {
+  const AuthGuard();
+
+  // AuthBloc-এর state বদলালে (login/logout) guard আবার চলবে
+  @override
+  Stream<Object?> refresh(BuildContext context) => context.read<AuthBloc>().stream;
+
+  @override
+  String? redirect(BuildContext context, GoRouterState state) {
+    final loggedIn = context.read<AuthBloc>().state.isLoggedIn;
+    final atLogin = state.matchedLocation == '/login';
+
+    // login নেই → login পেজে, আর কোথায় যেতে চেয়েছিল তা মনে রাখো
+    if (!loggedIn && !atLogin) {
+      return Uri(path: '/login', queryParameters: {'from': state.uri.toString()}).toString();
+    }
+    // login হয়ে গেছে কিন্তু login পেজে → আগের জায়গায় ফেরত
+    if (loggedIn && atLogin) return state.uri.queryParameters['from'] ?? '/';
+    return null; // ঢুকতে দাও
+  }
+}
+
+OmniApp(guards: const [AuthGuard()], ...);
+```
+
+### নির্দিষ্ট route-এ guard
+
+```dart
+final adminGuard = OmniGuard.fn(
+  (context, state) => context.read<AuthBloc>().state.isAdmin ? null : '/denied',
+  refresh: (context) => context.read<AuthBloc>().stream, // role বদলালে আবার চেক
+);
+
+OmniPage('/admin', (_) => const AdminScreen(), guards: [adminGuard]),
+```
+
+### metadata দিয়ে একটা guard-এ অনেক route
+
+```dart
+OmniPage('/reports', (_) => const ReportScreen(), metadata: const {'roles': ['admin', 'teacher']}),
+
+final roleGuard = OmniGuard.fn((context, state) {
+  final roles = state.metadata['roles'] as List<String>?;
+  if (roles == null) return null; // role দরকার নেই
+  final mine = context.read<AuthBloc>().state.roles;
+  return roles.any(mine.contains) ? null : '/denied';
+});
+```
+
+নিয়ম:
+- guard একের পর এক চলে; প্রথম যেটা path দেয়, সেটাই জেতে
+- `async` guard চলে (`Future<String?>`); sync guard-এ কোনো বাড়তি delay নেই
+- নিজের জায়গাতেই redirect করলে উপেক্ষা হয়; বড় loop হলে error পেজ (অসীম loop নয়)
+- `OmniRoute.refresh()` দিয়ে হাতে guard আবার চালানো যায়
+- guard-এ API call করবেন না — আগে থেকে load করা state (Bloc) পড়ুন
+
+> 🔒 **Guard নিরাপত্তা নয়।** Guard শুধু UI-তে কী দেখাবে তা ঠিক করে। প্রতিটা permission
+> আপনার backend-এও অবশ্যই যাচাই করতে হবে।
+
+---
+
+## ১৩. Lifecycle Hook — OmniLifecycle
+
+`WidgetsBindingObserver`, `addObserver`, `removeObserver` — কিছুই লিখতে হবে না।
+screen-এ `with OmniLifecycle` যোগ করে শুধু দরকারি hook override করুন।
+register আর cleanup নিজে থেকেই হয়।
+
+```dart
+// Stateless screen-এ
 class FeedScreen extends OmniStatelessWidget with OmniLifecycle {
   const FeedScreen({super.key});
+
   @override
   String get screenName => 'Feed';
 
+  // অ্যাপে ফিরে এলে নতুন data আনো
   @override
   void onAppResumed(BuildContext context) =>
       context.read<FeedBloc>().add(FeedRefreshed());
@@ -180,396 +657,223 @@ class FeedScreen extends OmniStatelessWidget with OmniLifecycle {
   Widget build(BuildContext context) => const FeedList();
 }
 
+// Stateful screen-এ — mixin যায় State-এ
 class _PlayerState extends OmniState<PlayerScreen> with OmniLifecycle {
+  // উপরে অন্য পেজ এলে, tab বদলালে বা pop হলে
   @override
-  void onScreenHidden(BuildContext context) => player.pause(); // pushed over, tab switched, popped
+  void onScreenHidden(BuildContext context) => player.pause();
+
+  // আবার দেখা গেলে
+  @override
+  void onScreenVisible(BuildContext context) => player.resume();
+
+  // অ্যাপ background-এ গেলে
   @override
   void onAppPaused(BuildContext context) => player.pause();
-  ...
+
+  @override
+  Widget build(BuildContext context) => PlayerView(player);
 }
 ```
 
-| Hook | When |
-|---|---|
-| `onAppResumed` / `onAppInactive` / `onAppHidden` / `onAppPaused` / `onAppDetached` | app lifecycle (plus `onAppLifecycleChanged(state)` for all) |
-| `onScreenVisible` / `onScreenHidden` | this screen becomes / stops being the visible one: first shown, page pushed over it or popped back to, tab switched, being popped. Hidden events of a frame come before visible ones |
-| `onMemoryPressure` | system low on memory |
-| `onMetricsChanged` | size, rotation, insets, keyboard |
-| `onBrightnessChanged` / `onLocalesChanged` / `onTextScaleChanged` | system settings changed |
-
-Hooks run outside `build` (so `setState` and Bloc events are fine) and never
-after the screen is disposed. App and system hooks reach every mounted
-screen with the mixin, including covered pages and hidden tabs.
-
-## 8. Screen registration
-
-```dart
-routes: [
-  OmniPage('/dashboard', (_) => const DashboardScreen()),
-  OmniPage('/students', (_) => const StudentScreen(), name: 'students', routes: [
-    OmniPage(':id', (p) => StudentDetailScreen(id: p.pathInt('id'))),
-  ]),
-  GoRoute(path: '/legacy', builder: (_, _) => const LegacyPage()), // raw go_router works too
-]
-```
-
-- Top-level paths start with `/`; child paths are relative (`':id'`, `'profile'`).
-- Paths must be lowercase and URL-safe, with no `#`, `?`, `//` or trailing `/`.
-- Duplicate paths, including `/a/:id` vs `/a/:slug`, are rejected at startup.
-- The same screen may be used by several routes.
-
-## 9. Global Bloc
-
-```dart
-blocs: [
-  OmniBloc<AuthBloc>((_) => AuthBloc(), global: true, lazy: false),
-  OmniBloc<ThemeBloc>((_) => ThemeBloc(), global: true),
-]
-```
-
-Global Blocs are created once above the router, are available everywhere
-(including in `builder`, e.g. to switch themes), and are closed only when
-`OmniApp` is disposed. A screen cannot `Provide` a global Bloc again; that is
-reported as an error.
-
-## 10. Screen Bloc
-
-Register a factory once, then name the type on the screen:
-
-```dart
-// OmniApp
-blocs: [OmniBloc<StudentBloc>((ctx) => StudentBloc(ctx.read<StudentRepo>()))],
-
-// Screen
-@override
-List<Provide> get provide => const [Provide<StudentBloc>()];
-```
-
-Factories receive a `BuildContext`, so dependencies come from
-`RepositoryProvider`s or global Blocs above.
-
-## 11. Single Bloc
-
-```dart
-@override
-List<Provide> get provide => const [Provide<AuthBloc>()];
-```
-
-The type parameter must be a `Bloc`; Cubits and other types do not compile.
-
-## 12. Multiple Blocs
-
-```dart
-@override
-List<Provide> get provide => [
-      Provide<StudentDetailBloc>.create((_) => StudentDetailBloc(id)), // needs a parameter
-      const Provide<AttendanceBloc>(),                                 // from the registry
-      Provide.value(existingBloc),                                     // not owned
-    ];
-```
-
-| Form | Created by | Closed by OmniRoute |
+| Hook | কখন ডাকা হয় | সাধারণ ব্যবহার |
 |---|---|---|
-| `Provide<B>()` | registered `OmniBloc<B>` factory | yes, when the page is removed |
-| `Provide<B>.create(fn)` | `fn` | yes |
-| `Provide.value(bloc)` | you | **never** |
+| `onAppResumed` | অ্যাপ আবার সামনে এলে | data refresh, token check |
+| `onAppInactive` | focus হারালে (call, app switcher) | timer থামানো |
+| `onAppHidden` | অ্যাপ দেখা যাচ্ছে না | animation থামানো |
+| `onAppPaused` | background-এ গেলে | draft save, media pause |
+| `onAppDetached` | engine বন্ধ হওয়ার আগে | শেষ cleanup |
+| `onAppLifecycleChanged(state)` | উপরের সবগুলোতে (আগে) | একসাথে সব দেখতে |
+| `onScreenVisible` | screen দেখা যেতে শুরু করলে | screen-view analytics, video চালানো |
+| `onScreenHidden` | screen ঢাকা পড়লে / tab বদলালে / pop হলে | video থামানো, timer থামানো |
+| `onMemoryPressure` | মেমরি কম | cache খালি করা |
+| `onMetricsChanged` | size, rotation, keyboard | layout হিসাব |
+| `onBrightnessChanged(b)` | light/dark mode বদল | chart-এর রং |
+| `onLocalesChanged(l)` | ভাষা বদল | ভাষা-নির্ভর data আবার আনা |
+| `onTextScaleChanged` | font size বদল | — |
 
-The same type twice in one list is an error.
+নিয়ম:
+- hook `build`-এর বাইরে চলে — `setState` বা Bloc event পাঠানো নিরাপদ
+- screen dispose হওয়ার পর কোনো hook চলে না
+- push করলে আগে পুরনো পেজের `onScreenHidden`, তারপর নতুনটার `onScreenVisible`
+- app/system hook ঢাকা পড়া পেজ আর লুকানো tab-এও যায়
+- যে screen-এ mixin নেই, তার উপর কোনো প্রভাব বা খরচ নেই
 
-## 13. Navigation
+---
 
-```dart
-OmniRoute.go('/students/101?tab=info');       // replace the stack (also "clear and go")
-OmniRoute.push('/students/101');              // push
-final saved = await OmniRoute.push<bool>('/students/101/edit');
-OmniRoute.pop(true);                          // pop with a result
-OmniRoute.replace('/login');                  // replace the top page
-OmniRoute.maybePop();                         // pop if possible; false on the first page
-OmniRoute.refresh();                          // re-run guards for the current page
-OmniRoute.goNamed('students');
-OmniRoute.replaceNamed('login');
-OmniRoute.to<StudentDetailScreen>(path: {'id': '101'}, query: {'tab': 'info'});
-OmniRoute.pushTo<StudentDetailScreen, bool>(path: {'id': '101'});
-OmniRoute.replaceTo<LoginScreen>();
-OmniRoute.location;                           // current Uri
-OmniRoute.router;                             // the GoRouter, for anything else
-```
+## ১৪. Route-এর বাইরে Screen — OmniScreenHost
 
-Inspecting navigation (debug tools, analytics, tests):
-
-```dart
-OmniRoute.current;   // OmniRouteEntry: location, name, screen type, metadata
-OmniRoute.stack;     // all pages bottom → top, through shells and pushes
-OmniRoute.state;     // go_router's GoRouterState of the top page
-
-OmniApp(
-  onNavigate: (nav) => analytics.screenView(nav.to.screen.toString(), nav.uri),
-  logNavigation: true,   // prints "[OmniRoute] / → /students/7 (StudentDetailScreen)" in debug
-  ...
-)
-```
-
-`context.go(...)`, `context.push(...)` and all other go_router APIs keep working.
-
-## 14. Dynamic routes
+কখনো screen route ছাড়া সরাসরি layout-এ বসে (tablet master–detail, dialog)।
 
 ```dart
-OmniPage('/attendance/daily', (p) => AttendanceScreen(
-  classNo: p.queryInt('class'),   // ?class=10
-  section: p.query('section'),    // &section=A
-));
+Row(children: [
+  // Stateless: নিজে থেকেই নিজের Bloc তৈরি করে
+  const Expanded(child: StudentListScreen()),
+
+  // Stateful: OmniScreenHost দিয়ে মুড়ে দিন
+  Expanded(child: OmniScreenHost(screen: DashboardScreen())),
+])
 ```
 
-`OmniParams`: `path`, `pathInt`, `query`, `queryInt`, `queryDouble`,
-`queryBool` (`true/false/1/0`), `queryEnum(name, Sort.values)`, `queryAll`,
-`extra<T>()`, `uri`, `state`. Values are already URL-decoded. An invalid
-value (e.g. `/students/abc` for `pathInt`) shows the not-found page instead
-of crashing.
+stateful screen মুড়তে ভুলে গেলে পরিষ্কার `screenNotHosted` error আসে (কী করতে হবে সহ)।
 
-Inside Bloc factories and `initState`, use `OmniParams.of(context)`; it reads
-without subscribing:
+---
 
-```dart
-Provide<StudentBloc>.create((c) => StudentBloc(OmniParams.of(c).pathInt('id')))
-```
-
-## 15. Nested routes
-
-```dart
-OmniPage('/settings', (_) => const SettingsScreen(), routes: [
-  OmniPage('profile', (_) => const ProfileScreen()),   // /settings/profile
-]),
-```
-
-Going to `/settings/profile` builds both pages; back returns to Settings.
-
-**Route groups (route scope).** Nested routes are separate pages, so a child
-route can't read its parent page's Blocs. To share Blocs between several
-routes, put them in an `OmniRouteGroup`:
-
-```dart
-OmniPage('/students', (_) => const StudentListScreen(), routes: [
-  OmniRouteGroup(
-    scopeKey: (s) => s.pathParameters['id'],   // new Blocs for another student
-    provide: [
-      Provide<StudentBloc>.create((c) => StudentBloc(OmniParams.of(c).pathInt('id'))),
-    ],
-    routes: [
-      OmniPage(':id', (p) => StudentDetailScreen(id: p.pathInt('id')), routes: [
-        OmniPage('edit', (_) => const StudentEditScreen()),
-      ]),
-    ],
-  ),
-]),
-```
-
-The Blocs are created on entering the group, kept while moving inside it or
-while other pages are pushed on top, and closed when the user leaves it.
-
-## 16. Shell routes
-
-```dart
-OmniShell(
-  provide: const [Provide<InboxBloc>()],             // lives while the shell is shown
-  builder: (context, state, child) => AppFrame(child: child),
-  routes: [OmniPage('/inbox', (_) => const InboxScreen())],
-),
-
-OmniStatefulShell(
-  builder: (context, state, shell) => Scaffold(
-    body: shell,
-    bottomNavigationBar: NavigationBar(
-      selectedIndex: shell.currentIndex,
-      onDestinationSelected: shell.goBranch,
-      destinations: const [/* ... */],
-    ),
-  ),
-  branches: [
-    StatefulShellBranch(routes: [OmniPage('/dashboard', (_) => const DashboardScreen())]),
-    StatefulShellBranch(routes: [OmniPage('/students', (_) => const StudentScreen())]),
-  ],
-),
-```
-
-`OmniStatefulShell` uses go_router's `StatefulShellRoute.indexedStack`: each
-tab keeps its own stack, widget state and Blocs while other tabs are shown.
-
-## 17. Authentication guard
-
-```dart
-class AuthGuard extends OmniGuard {
-  const AuthGuard();
-
-  @override
-  Stream<Object?> refresh(BuildContext context) =>
-      context.read<AuthBloc>().stream;          // re-check when auth changes
-
-  @override
-  String? redirect(BuildContext context, GoRouterState state) {
-    final loggedIn = context.read<AuthBloc>().state.isLoggedIn;
-    final atLogin = state.matchedLocation == '/login';
-    if (!loggedIn && !atLogin) {
-      return Uri(path: '/login', queryParameters: {'from': state.uri.toString()}).toString();
-    }
-    if (loggedIn && atLogin) return state.uri.queryParameters['from'] ?? '/';
-    return null;
-  }
-}
-
-OmniApp(guards: const [AuthGuard()], ...);
-OmniPage('/admin', (_) => const AdminScreen(),
-    guards: [OmniGuard.fn((c, s) => c.read<AuthBloc>().state.isAdmin ? null : '/denied')]);
-```
-
-- Guards run in order; the first non-null redirect wins. They may be `async`.
-- Sync guards stay synchronous, so they add no extra frame of delay.
-- A redirect to the current location is ignored; longer loops are stopped by
-  GoRouter's `redirectLimit` and shown on the error page.
-- Read state, don't call APIs: guards run on every navigation.
-- **Guards are not security.** They control what the UI shows; your backend
-  must enforce every permission too.
-
-Route metadata lets one guard cover many routes:
-
-```dart
-OmniPage('/admin', (_) => const AdminScreen(), metadata: const {'roles': ['admin']}),
-
-final roleGuard = OmniGuard.fn((c, s) {
-  final roles = s.metadata['roles'] as List<String>?;
-  if (roles == null || roles.any(c.read<AuthBloc>().state.roles.contains)) return null;
-  return '/denied';
-});
-```
-
-## 18. Web path URLs
+## ১৫. Web — পরিষ্কার URL
 
 ```dart
 void main() {
-  OmniRoute.usePathUrls();
+  OmniRoute.usePathUrls(); // runApp-এর আগে
   runApp(const MyApp());
 }
 ```
 
-You get `https://example.com/students/101`, browser back and forward,
-refresh, direct access, browser tab titles from `title`, and
-`/students/` → `/students`.
+পাওয়া যায়: `https://example.com/students/101`, browser back/forward, refresh,
+সরাসরি URL খোলা, tab-এ title, আর `/students/` → `/students` নিজে থেকেই।
 
-**Your server must return `index.html` for unknown paths.** Nginx:
+**⚠️ Server-কে বলতে হবে অজানা path-এ `index.html` দিতে** — নাহলে refresh-এ 404:
 
 ```nginx
+# Nginx
 location / { try_files $uri $uri/ /index.html; }
 ```
 
-Apache, Firebase, Netlify, Vercel, GitHub Pages and subdirectory deploys
-(`flutter build web --base-href /myapp/`): see [doc/web.md](doc/web.md).
-
-## 19. Deep linking
-
-GoRouter receives links from the OS; OmniRoute's guards run on them like on
-any navigation. You need platform setup:
-
-- **Android App Links:** intent-filter with `android:autoVerify="true"` and
-  `/.well-known/assetlinks.json`
-- **iOS Universal Links:** Associated Domains `applinks:example.com` and
-  `/.well-known/apple-app-site-association`
-
-Full steps and test commands: [doc/platforms.md](doc/platforms.md#deep-links).
-
-## 20. Platform configuration
-
-| Platform | Back | Deep links |
-|---|---|---|
-| Android | system back, `PopScope` | App Links / custom scheme (manifest) |
-| iOS | edge swipe-back | Universal Links / custom scheme |
-| Web | browser back/forward | any URL + server fallback |
-| macOS | Cmd+[, Cmd+←, mouse back | URL scheme (Info.plist) |
-| Windows / Linux | Alt+←, mouse back | needs OS registration + plugin |
-
-```dart
-OmniApp(
-  pageType: OmniPages.material,  // default; or OmniPages.cupertino / OmniPages.none
-  desktopBack: true,             // default
-  escapeGoesBack: false,         // default
-  ...
-)
+```apache
+# Apache (.htaccess)
+FallbackResource /index.html
 ```
 
-What was checked on which platform: [doc/platforms.md](doc/platforms.md).
+Subdirectory-তে (`example.com/myapp/`) deploy করলে:
 
-**State restoration** (Android process death, iOS restoration):
+```bash
+flutter build web --base-href /myapp/
+```
+
+Firebase, Netlify, Vercel, GitHub Pages-এর setting: [doc/web.md](doc/web.md)।
+
+---
+
+## ১৬. Deep Link
+
+OS থেকে link এলে GoRouter সেটা খোলে, আর আপনার guard-ও চলে
+(login না থাকলে login পেজ → login-এর পর linked পেজ)।
+এর জন্য platform-এ সেটআপ লাগে:
+
+- **Android App Links:** `AndroidManifest.xml`-এ `autoVerify` intent-filter + `/.well-known/assetlinks.json`
+- **iOS Universal Links:** Associated Domains (`applinks:example.com`) + `/.well-known/apple-app-site-association`
+
+পুরো ধাপ আর test command: [doc/platforms.md](doc/platforms.md#deep-links)।
+
+---
+
+## ১৭. Platform সেটিং
+
+### Page transition
+
+```dart
+OmniApp(pageType: OmniPages.material, ...)                // default — প্রতিটা platform-এর নিজস্ব animation
+OmniApp(pageType: OmniPages.cupertino, ...)               // সব জায়গায় iOS-এর মতো slide + swipe-back
+OmniApp(pageType: OmniPages.none, ...)                    // animation নেই (web/desktop-এ ভালো)
+OmniPage('/x', builder, pageType: OmniPages.none)         // শুধু একটা route-এ
+```
+
+### Back বাটন
+
+| Platform | Back | কে সামলায় |
+|---|---|---|
+| Android | system back, `PopScope` মানে | Flutter |
+| iOS | বাম কিনারা থেকে swipe | Flutter |
+| Windows / Linux | Alt+←, mouse back বাটন | OmniRoute (`desktopBack`) |
+| macOS | Cmd+[, Cmd+←, mouse back | OmniRoute (`desktopBack`) |
+| Web | browser back/forward | browser |
+
+`PopScope(canPop: false)` দিয়ে back আটকানো সব platform-এ কাজ করে।
+
+### State Restoration (Android অ্যাপ মেরে ফেললেও একই জায়গায় ফেরা)
 
 ```dart
 OmniApp(
   restorationScopeId: 'router',
-  builder: (context, router) =>
-      MaterialApp.router(restorationScopeId: 'app', routerConfig: router),
+  builder: (context, router) => MaterialApp.router(
+    restorationScopeId: 'app', // এটাও দিতে হবে
+    routerConfig: router,
+  ),
   ...
 )
 ```
 
-Restores the route stack, shell tabs and `Restorable*` widget state; Blocs
-are created again (persist their data yourself).
+ফিরে আসে: পেজের stack, বেছে নেওয়া tab, `Restorable*` widget state।
+ফেরে না: Bloc-এর state (Bloc নতুন করে তৈরি হয় — দরকারি data নিজে save করুন)।
 
-## 21. Lifecycle management
+---
 
-| Resource | Owner | Released |
+## ১৮. Debugging ও Analytics
+
+```dart
+OmniRoute.current;  // উপরের পেজ: location, name, screen type, metadata
+OmniRoute.stack;    // নিচ থেকে উপর পর্যন্ত সব পেজ (shell, push সহ)
+OmniRoute.state;    // go_router-এর GoRouterState
+
+OmniApp(
+  // প্রতিটা navigation-এর পর একবার (go, push, pop, back, deep link, redirect)
+  onNavigate: (nav) {
+    // nav.from → আগের পেজ, nav.to → নতুন পেজ, nav.uri → পুরো URL
+    analytics.logScreenView(nav.to.screen.toString(), nav.uri.toString());
+  },
+  // debug build-এ console-এ: [OmniRoute] / → /students/7 (StudentDetailScreen)
+  logNavigation: true,
+  ...
+)
+```
+
+Observer লাগলে: `OmniApp(observers:)` (root), `OmniShell(observers:)`,
+`OmniRouteGroup(observers:)`, `StatefulShellBranch(observers:)`।
+
+---
+
+## ১৯. Error ও সমাধান
+
+সব error `OmniRouteException` — এতে `code`, `message` আর সমাধানের `hint` থাকে।
+
+| Error / সমস্যা | কারণ | সমাধান |
 |---|---|---|
-| `GoRouter` | `OmniApp` | when `OmniApp` is disposed |
-| Global Bloc | app scope | when `OmniApp` is disposed |
-| Route-group Bloc | `OmniRouteGroup` | when the user leaves the group or `scopeKey` changes |
-| Screen Bloc (`Provide<B>()` / `.create`) | its page | when the page is popped or replaced |
-| `Provide.value` Bloc | you | never by OmniRoute |
-| Shell Bloc | the shell | when the shell is no longer shown |
-| Screen Bloc (screen outside a route) | the screen / `OmniScreenHost` | when it is removed |
-| Guard refresh subscriptions | `OmniApp` | when `OmniApp` is disposed |
+| `invalidRoutePath ... lowercase` | path-এ বড় হাতের অক্ষর | ছোট হাতের লিখুন |
+| `duplicateRoute` | একই URL বা একই `name` দুবার | একটার নাম/path বদলান |
+| `emptyScreenName` | `screenName` খালি | নাম দিন |
+| `missingBlocFactory` | Bloc register করা হয়নি | `OmniApp(blocs:)`-এ `OmniBloc<X>(...)` যোগ করুন |
+| `duplicateBlocRegistration` | একই Bloc দুবার | একটা সরান |
+| `unsupportedConfiguration: X is global` | global Bloc screen-এ আবার `Provide` | `Provide` সরিয়ে `context.read<X>()` |
+| `screenNotHosted` | route ছাড়া stateful screen | `OmniScreenHost(screen: ...)` |
+| `notInitialized` | `OmniApp` তৈরির আগে navigation | পরে navigate করুন বা `context.go` |
+| `missingRoute: No OmniPage builds X` | screen-এর route নেই, বা `List<OmniPage>` টাইপ | route যোগ করুন / `List<RouteBase>` |
+| `X is used by several routes` | একই screen কয়েকটা route-এ | path বা `goNamed` দিয়ে navigate |
+| `invalidParameter` | URL-এ ভুল মান | not-found পেজ দেখায় (crash নয়) |
+| Web-এ refresh করলে 404 | server fallback নেই | ১৫তম অংশ |
+| child route parent-এর Bloc পায় না | nested route আলাদা পেজ | `OmniRouteGroup` |
+| route বদল কাজ করছে না | hot reload | hot restart |
 
-- A rebuild never recreates a Bloc; a covered page keeps its Blocs.
-- Each Bloc is closed exactly once.
-- `OmniApp` reads its configuration once. After changing routes or Blocs, do a
-  hot **restart**, as with a `GoRouter` held in state.
+---
 
-## 22. Performance considerations
+## ২০. সম্পূর্ণ উদাহরণ
 
-- Startup validation and indexing run once; route matching is go_router's.
-- In a profile-mode benchmark against the same app written with plain
-  go_router and BlocProvider, the differences were within run-to-run noise
-  ([doc/performance.md](doc/performance.md)).
-- All tests run with Flutter's leak tracker.
-- Keep guards cheap; put data needed after a web refresh in the URL, not in
-  `extra`.
+[`example/lib/main.dart`](example/lib/main.dart)-এ একটা পূর্ণ অ্যাপ আছে:
 
-## 23. Troubleshooting
-
-| Message / symptom | Fix |
-|---|---|
-| `missingBlocFactory: No factory registered for X` | add `OmniBloc<X>(...)` to `OmniApp(blocs:)` |
-| `unsupportedConfiguration: X is global` | remove `Provide<X>()`; use `context.read<X>()` |
-| `invalidRoutePath ... must be lowercase` | use lowercase path segments |
-| `duplicateRoute` | two routes match the same URLs |
-| `notInitialized: No OmniApp is mounted` | navigate after `OmniApp` is built, or use `context.go` |
-| `X is used by several routes` | navigate by path or `goNamed` |
-| `No OmniPage builds X` but it is registered | routes in a `List<OmniPage>` lose the screen type: use `List<RouteBase>` or `OmniPage<X>(...)` |
-| 404 after refreshing on the web | configure the server fallback (§18) |
-| No page transition on a raw `GoRoute` | use `OmniPage` or give it a `pageBuilder` |
-| Route changes ignored after hot reload | hot restart |
-| `screenNotHosted` | wrap the stateful screen in `OmniScreenHost` |
-| `Route name "x" is used by both ...` | route names must be unique |
-| Child route can't find its parent's Bloc | share it with `OmniRouteGroup` |
-
-## 24. Complete example
-
-[`example/lib/main.dart`](example/lib/main.dart) is a full app: login with an
-auth guard, dashboard, student list, student details (multiple Blocs, one
-built from a route parameter, shared with an edit page through
-`OmniRouteGroup`), settings with nested profile, global auth and
-theme Blocs, a bottom-tab stateful shell, and path URLs.
+- Login + Auth guard (login-এর পর আগের পেজে ফেরে)
+- Bottom tab (`OmniStatefulShell`) — Dashboard, Students, Settings
+- Dashboard: `OmniStatefulWidget` + `OmniLifecycle` (অ্যাপে ফেরা গোনে)
+- Student list → detail → edit, একই Bloc ভাগ করে (`OmniRouteGroup`)
+- Global Bloc: Auth আর Theme (dark mode)
+- Settings → nested Profile
+- Web path URL, navigation logging, state restoration
 
 ```bash
 cd example
-flutter run -d chrome   # or macos, an iOS simulator, an Android device
-flutter test            # full flow test
+flutter run -d chrome   # বা macos, iOS simulator, Android
+flutter test            # পুরো flow-এর test
 ```
+
+---
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT — [LICENSE](LICENSE) দেখুন।
