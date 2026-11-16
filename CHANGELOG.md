@@ -1,3 +1,22 @@
+## 0.3.1
+
+No API changes; purely additive. Everything new is off by default.
+
+- New `OmniApp(predictiveBack: true)`: Android's system back gesture
+  (predictive back, Android 14+) drives the swipe-back styles — the page
+  zooms out with the finger, pops on commit (through go_router, so the
+  stack, `onNavigate`, logs and `OmniLifecycle` stay correct) and springs
+  back on cancel. Uses the page's `swipeBack` style (`zoom` when the
+  in-app swipe is off). Back button presses still pop normally. Needs
+  `android:enableOnBackInvokedCallback="true"` in `AndroidManifest.xml`.
+- With `predictiveBack` on Android, `material`/`cupertino` pages use the
+  new `OmniPages.swipeZoom` so they follow the gesture too (iOS unchanged).
+- New `OmniPages.swipeZoom`: soft zoom-in (0.94 → 1) with a fade, plus the
+  `zoom` edge swipe.
+- The edge swipe and the system gesture share one settle path; only the
+  page on top of everything (go_router's top page, in a visible tab) takes
+  the system gesture.
+
 ## 0.3.0
 
 No breaking API changes; everything new is optional. One deprecation:

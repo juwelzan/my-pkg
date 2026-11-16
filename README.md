@@ -56,7 +56,7 @@ dependencies:
   omni_route:
     git:
       url: https://github.com/juwelzan/omni_route.git
-      ref: v0.3.0          # release tag — নতুন version এলে শুধু এটা বদলান
+      ref: v0.3.1          # release tag — নতুন version এলে শুধু এটা বদলান
   flutter_bloc: ^9.1.1     # context.read / BlocBuilder ব্যবহারের জন্য
   go_router: ^18.1.4       # go_router-এর type (যেমন GoRouterState) সরাসরি লাগলে
 ```
@@ -984,7 +984,7 @@ if (ok ?? false) deleteStudent();
 > ⚠️ **Android predictive back animation** শুধু `material`-এ থাকে। custom animation-এ back বাটন
 > আর system back ঠিকই কাজ করে। custom animation-এ swipe-back চাইলে নিচের **Swipe back** দেখুন।
 
-### Swipe back — কিনারা থেকে টেনে পেজ বন্ধ (0.2.5, ৮টা style 0.2.6)
+### Swipe back ও predictive back — কিনারা থেকে টেনে পেজ বন্ধ (0.2.5; ৮টা style 0.2.6; Android predictive back 0.3.1)
 
 <!-- GIF: docs/swipe_back_zoom.gif (push → অর্ধেক টেনে ছেড়ে দেওয়া → পুরো টেনে zoom-out pop) -->
 ![Swipe back zoom](docs/swipe_back_zoom.gif)
@@ -1041,6 +1041,42 @@ const OmniSwipeBackStyle(
 OmniSwipeBackStyle.subtle();   // কম zoom, tilt নেই
 OmniSwipeBackStyle.dramatic(); // বেশি zoom, ছায়া, dim
 ```
+
+```dart
+// ৬) তৈরি page type — reference আচরণ: খোলার সময় হালকা zoom-in + fade, টানলে zoom-out
+OmniApp(pageType: OmniPages.swipeZoom, ...)
+```
+
+#### Android predictive back (Android 14+, system-এর back gesture)
+
+Android-এ gesture navigation চালু থাকলে স্ক্রিনের কিনারা system-এর — অ্যাপের নিজের কিনারা-strip সেখানে
+প্রায় কখনো gesture পায় না। তাই system-এর back gesture-ও একই zoom style-এ চালাতে:
+
+```dart
+OmniApp(
+  swipeBack: OmniSwipeBack.zoomCard, // in-app কিনারা swipe (3-button navigation / iOS)
+  predictiveBack: true,              // Android-এর system back gesture-ও একই style-এ
+  ...
+)
+```
+
+`android/app/src/main/AndroidManifest.xml`-এ `<application>`-এ এটা দিতে হবে, তারপর **পুরো rebuild**
+(hot restart যথেষ্ট নয়) — না দিলে Android 14+ gesture-এর progress পাঠায় না, back শুধু সাধারণ pop করে:
+
+```xml
+<application
+    android:enableOnBackInvokedCallback="true"
+    ...>
+```
+
+- আঙুলের সাথে পেজ zoom-out হয়; ছেড়ে দিলে (commit) পেজ বন্ধ, ফিরিয়ে নিলে (cancel) আগের জায়গায় ফেরে।
+- `swipeBack: none` হলেও `predictiveBack: true` দিলে system gesture-এ `zoom` style চলে; কোনো পেজে
+  `swipeBack: OmniSwipeBack.none` দিলে সেই পেজে দুটোই বন্ধ (সাধারণ pop)।
+- Android-এ `material`/`cupertino` পেজও তখন `OmniPages.swipeZoom` হয়ে যায়, যাতে gesture অনুসরণ করে;
+  iOS-এ সেগুলো আগের মতোই থাকে (নিজস্ব swipe-back সহ)।
+- back **বাটন** চাপলে (gesture নয়) আগের মতোই সাধারণ pop।
+- debug-এ "manifest flag নেই" সতর্কতা দেওয়া হয় না — Android flag না থাকলে অ্যাপ কোনো সংকেতই পায় না, তাই
+  নির্ভরযোগ্যভাবে ধরা যায় না।
 
 **কীভাবে কাজ করে**
 - বাম বা ডান কিনারা থেকে শুরু করতে হয়; ভেতরের দিকে টানলে বন্ধ হয়, উল্টো দিকে কিছু হয় না।

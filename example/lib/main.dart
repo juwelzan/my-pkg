@@ -101,6 +101,9 @@ class ExampleApp extends StatelessWidget {
     // is app-wide and can be switched live in Settings.
     pageType: OmniPages.fade,
     swipeBack: mode,
+    // Android 14+: the system back gesture zooms the page out too (needs
+    // enableOnBackInvokedCallback in AndroidManifest.xml).
+    predictiveBack: true,
     blocs: [
       // Global Blocs: created once, live for the whole app.
       OmniBloc<AuthBloc>((_) => AuthBloc(), global: true, lazy: false),

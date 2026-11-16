@@ -70,6 +70,7 @@ class OmniApp extends StatefulWidget {
     this.swipeBack = OmniSwipeBack.none,
     this.swipeBackStyle = const OmniSwipeBackStyle(),
     this.titleColor,
+    this.predictiveBack = false,
   });
 
   /// [OmniPage]s and any raw go_router [RouteBase]s.
@@ -123,6 +124,17 @@ class OmniApp extends StatefulWidget {
 
   /// Default tuning for [swipeBack].
   final OmniSwipeBackStyle swipeBackStyle;
+
+  /// Follow Android's system back gesture (predictive back, Android 14+):
+  /// the page zooms out with the finger in the [swipeBack] style (`zoom`
+  /// when [swipeBack] is `none`), pops past the threshold and springs back
+  /// below it. On Android, `material`/`cupertino` pages then use
+  /// [OmniPages.swipeZoom] so they follow the gesture too.
+  ///
+  /// Needs `android:enableOnBackInvokedCallback="true"` on `<application>`
+  /// in `AndroidManifest.xml` (full rebuild); without it Android sends no
+  /// gesture progress and back simply pops. Off by default.
+  final bool predictiveBack;
 
   /// Colour of the app in the Android recent-apps switcher (and similar),
   /// set with each page's title. Null uses the theme's
@@ -387,6 +399,7 @@ class _OmniAppState extends State<OmniApp> {
       child: OmniSwipeBackDefaults(
         mode: widget.swipeBack,
         style: widget.swipeBackStyle,
+        predictiveBack: widget.predictiveBack,
         child: OmniGlobalBlocScope(
           registry: _blocs,
           child: GuardRefresh(

@@ -4,6 +4,7 @@ import 'dart:ui' show lerpDouble;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 /// How a page can be closed by an edge swipe; see `OmniPages.transition`,
@@ -208,6 +209,7 @@ class OmniSwipeBackDefaults extends InheritedWidget {
     super.key,
     required this.mode,
     required this.style,
+    this.predictiveBack = false,
     required super.child,
   });
 
@@ -217,19 +219,32 @@ class OmniSwipeBackDefaults extends InheritedWidget {
   /// Default tuning.
   final OmniSwipeBackStyle style;
 
+  /// Follow Android's system back gesture (predictive back).
+  final bool predictiveBack;
+
   /// The nearest defaults, or "off".
-  static (OmniSwipeBack, OmniSwipeBackStyle) of(BuildContext context) {
+  static (OmniSwipeBack, OmniSwipeBackStyle, bool) of(BuildContext context) {
     final d = context
         .dependOnInheritedWidgetOfExactType<OmniSwipeBackDefaults>();
     return (
       d?.mode ?? OmniSwipeBack.none,
       d?.style ?? const OmniSwipeBackStyle(),
+      d?.predictiveBack ?? false,
     );
   }
 
+  /// Whether predictive back is on, read without subscribing.
+  static bool predictiveBackOf(BuildContext context) =>
+      context
+          .getInheritedWidgetOfExactType<OmniSwipeBackDefaults>()
+          ?.predictiveBack ??
+      false;
+
   @override
   bool updateShouldNotify(OmniSwipeBackDefaults old) =>
-      old.mode != mode || old.style != style;
+      old.mode != mode ||
+      old.style != style ||
+      old.predictiveBack != predictiveBack;
 }
 
 /// Resolved visual values for one swipe.
@@ -323,10 +338,18 @@ class _OmniSwipeBackRoute<T> extends PageRoute<T> {
     Animation<double> secondaryAnimation,
     Widget child,
   ) {
-    final (appMode, appStyle) = OmniSwipeBackDefaults.of(context);
+    final (appMode, appStyle, predictive) = OmniSwipeBackDefaults.of(context);
     final mode = _page.swipeBack ?? appMode;
+    // Android's system back gesture uses this page's style (zoom when the
+    // in-app swipe is off). An explicit `swipeBack: none` on the page turns
+    // both off.
+    final predictiveMode = predictive && _page.swipeBack != OmniSwipeBack.none
+        ? (mode == OmniSwipeBack.none ? OmniSwipeBack.zoom : mode)
+        : null;
     // Swipe-back off everywhere: exactly the plain transition.
-    if (mode == OmniSwipeBack.none && appMode == OmniSwipeBack.none) {
+    if (mode == OmniSwipeBack.none &&
+        appMode == OmniSwipeBack.none &&
+        predictiveMode == null) {
       return _page.transitionsBuilder(
         context,
         animation,
@@ -337,6 +360,7 @@ class _OmniSwipeBackRoute<T> extends PageRoute<T> {
     return _SwipeBackLayer(
       route: this,
       mode: mode,
+      predictiveMode: predictiveMode,
       style: _page.swipeBackStyle ?? appStyle,
       animation: animation,
       secondaryAnimation: secondaryAnimation,
@@ -377,6 +401,7 @@ class _SwipeBackLayer extends StatefulWidget {
   const _SwipeBackLayer({
     required this.route,
     required this.mode,
+    required this.predictiveMode,
     required this.style,
     required this.animation,
     required this.secondaryAnimation,
@@ -384,7 +409,12 @@ class _SwipeBackLayer extends StatefulWidget {
   });
 
   final _OmniSwipeBackRoute<dynamic> route;
+
+  /// In-app edge swipe style (none = no edge strips).
   final OmniSwipeBack mode;
+
+  /// Style for Android's system back gesture, or null to ignore it.
+  final OmniSwipeBack? predictiveMode;
   final OmniSwipeBackStyle style;
   final Animation<double> animation;
   final Animation<double> secondaryAnimation;
@@ -394,7 +424,8 @@ class _SwipeBackLayer extends StatefulWidget {
   State<_SwipeBackLayer> createState() => _SwipeBackLayerState();
 }
 
-class _SwipeBackLayerState extends State<_SwipeBackLayer> {
+class _SwipeBackLayerState extends State<_SwipeBackLayer>
+    with WidgetsBindingObserver {
   late final HorizontalDragGestureRecognizer _drag =
       HorizontalDragGestureRecognizer(debugOwner: this)
         // The page follows the finger from where it touched down.
@@ -416,10 +447,82 @@ class _SwipeBackLayerState extends State<_SwipeBackLayer> {
   Alignment _focal = Alignment.center;
 
   @override
+  void initState() {
+    super.initState();
+    if (widget.predictiveMode != null) {
+      WidgetsBinding.instance.addObserver(this);
+    }
+  }
+
+  @override
+  void didUpdateWidget(_SwipeBackLayer old) {
+    super.didUpdateWidget(old);
+    final was = old.predictiveMode != null;
+    final now = widget.predictiveMode != null;
+    if (was && !now) WidgetsBinding.instance.removeObserver(this);
+    if (!was && now) WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _drag.dispose();
     _finishGesture(rebuild: false);
     super.dispose();
+  }
+
+  // ── Android predictive back ─────────────────────────────────────────
+  // The binding hands the gesture to every observer that accepts it, so
+  // only the page on top of everything (go_router's top page, in a visible
+  // tab) accepts. A button press (`isButtonEvent`) is left to the normal
+  // `handlePopRoute`, which pops as usual.
+
+  bool _isTopPage() {
+    if (!widget.route.swipeEnabled || !TickerMode.valuesOf(context).enabled) {
+      return false;
+    }
+    final router = GoRouter.maybeOf(context);
+    return router == null || router.state.pageKey == widget.route._page.key;
+  }
+
+  @override
+  bool handleStartBackGesture(PredictiveBackEvent backEvent) {
+    final mode = widget.predictiveMode;
+    if (mode == null || backEvent.isButtonEvent || _navigator != null) {
+      return false;
+    }
+    if (!_isTopPage()) return false;
+    final box = context.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return false;
+    _side = backEvent.swipeEdge == SwipeEdge.left ? 1.0 : -1.0;
+    _width = box.size.width;
+    final touch = backEvent.touchOffset;
+    if (touch != null) _setFocal(box, touch);
+    _begin(mode);
+    widget.route.swipeController.value = 1 - backEvent.progress;
+    return true;
+  }
+
+  @override
+  void handleUpdateBackGestureProgress(PredictiveBackEvent backEvent) {
+    if (_navigator == null) return;
+    final box = context.findRenderObject() as RenderBox?;
+    final touch = backEvent.touchOffset;
+    if (box != null && box.hasSize && touch != null) _setFocal(box, touch);
+    widget.route.swipeController.value = (1 - backEvent.progress).clamp(
+      0.0,
+      1.0,
+    );
+  }
+
+  @override
+  void handleCommitBackGesture() {
+    if (_navigator != null) _close();
+  }
+
+  @override
+  void handleCancelBackGesture() {
+    if (_navigator != null) _settle();
   }
 
   void _onPointerDown(PointerDownEvent e) {
@@ -458,11 +561,16 @@ class _SwipeBackLayerState extends State<_SwipeBackLayer> {
 
   void _onStart(DragStartDetails _) {
     if (!widget.route.swipeEnabled) return;
+    _begin(widget.mode);
+  }
+
+  /// Starts a swipe (edge drag or system back gesture) in [style].
+  void _begin(OmniSwipeBack style) {
     final nav = widget.route.navigator!..didStartUserGesture();
     _navigator = nav;
     final mode = MediaQuery.disableAnimationsOf(context)
         ? OmniSwipeBack.slide
-        : widget.mode;
+        : style;
     final swipe = _ActiveSwipe(_Look(mode, widget.style), _side);
     _activeSwipes[nav] = swipe;
     setState(() => _swipe = swipe);
@@ -491,23 +599,31 @@ class _SwipeBackLayerState extends State<_SwipeBackLayer> {
         (velocity >= s.flickVelocity ||
             (progress > s.closeThreshold && velocity > -s.flickVelocity));
     if (close) {
-      final ms = math.max(
-        80,
-        (s.settleDuration.inMilliseconds * c.value).round(),
-      );
-      widget.route.swipePop(context);
-      // pop() starts the normal reverse animation; continue from where the
-      // finger left instead.
-      c
-          .animateBack(
-            0,
-            duration: Duration(milliseconds: ms),
-            curve: s.closeCurve,
-          )
-          .whenCompleteOrCancel(_finishGesture);
+      _close();
     } else {
       _settle();
     }
+  }
+
+  /// Closes the page from where the gesture left it (shared by the edge
+  /// swipe and the system back gesture).
+  void _close() {
+    final s = widget.style;
+    final c = widget.route.swipeController;
+    final ms = math.max(
+      80,
+      (s.settleDuration.inMilliseconds * c.value).round(),
+    );
+    widget.route.swipePop(context);
+    // pop() starts the normal reverse animation; continue from where the
+    // finger left instead.
+    c
+        .animateBack(
+          0,
+          duration: Duration(milliseconds: ms),
+          curve: s.closeCurve,
+        )
+        .whenCompleteOrCancel(_finishGesture);
   }
 
   void _onCancel() {
@@ -515,6 +631,7 @@ class _SwipeBackLayerState extends State<_SwipeBackLayer> {
     _settle();
   }
 
+  /// Springs the page back open.
   void _settle() {
     final s = widget.style;
     final c = widget.route.swipeController;

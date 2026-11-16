@@ -134,6 +134,37 @@ abstract final class OmniPages {
       _fadeSlide(key, name, child);
   static final OmniPageType _fadeSlide = transition(OmniTransition.fadeSlide);
 
+  /// Ready-made page with the `zoom` swipe-back: a soft zoom-in (0.94 → 1)
+  /// with a fade on open/close, and the edge swipe (and Android's system
+  /// back gesture with `OmniApp(predictiveBack: true)`) zooms the page out
+  /// with the finger.
+  static Page<void> swipeZoom(LocalKey key, String? name, Widget child) =>
+      _swipeZoom(key, name, child);
+  static final OmniPageType _swipeZoom = custom(
+    _softZoom,
+    swipeBack: OmniSwipeBack.zoom,
+  );
+
+  // material/cupertino pages on Android with predictive back: same look,
+  // but the swipe style follows the app default.
+  static final OmniPageType _androidPredictive = custom(_softZoom);
+
+  static Widget _softZoom(
+    BuildContext context,
+    Animation<double> a,
+    Animation<double> s,
+    Widget child,
+  ) {
+    final curved = a.drive(CurveTween(curve: Curves.easeOutCubic));
+    return FadeTransition(
+      opacity: curved,
+      child: ScaleTransition(
+        scale: curved.drive(Tween(begin: 0.94, end: 1.0)),
+        child: child,
+      ),
+    );
+  }
+
   /// A built-in [kind] with your own [duration], [reverseDuration] and
   /// [curve]:
   ///
@@ -456,7 +487,16 @@ class OmniPage<S extends OmniScreen> extends GoRoute {
         child: child,
       );
     }
-    return (pageType ?? config.pageType)(state.pageKey, name, child);
+    var type = pageType ?? config.pageType;
+    // Predictive back on Android: platform page types can't follow the
+    // gesture with OmniRoute's styles, so they use the soft zoom page.
+    if ((type == OmniPages.material || type == OmniPages.cupertino) &&
+        !kIsWeb &&
+        defaultTargetPlatform == TargetPlatform.android &&
+        OmniSwipeBackDefaults.predictiveBackOf(context)) {
+      type = OmniPages._androidPredictive;
+    }
+    return type(state.pageKey, name, child);
   }
 }
 
