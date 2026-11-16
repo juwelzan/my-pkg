@@ -5,7 +5,6 @@
 import 'dart:convert';
 import 'dart:io';
 
-
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -24,47 +23,52 @@ class ListBloc extends Bloc<int, int> {
 }
 
 Widget itemBody(int id, BuildContext context) => Scaffold(
-      appBar: AppBar(title: Text('Item $id')),
-      body: ListView.builder(
-        itemCount: 30,
-        itemBuilder: (_, i) => ListTile(
-          title: Text('Row $i of ${context.read<ItemBloc>().state}'),
-        ),
-      ),
-    );
+  appBar: AppBar(title: Text('Item $id')),
+  body: ListView.builder(
+    itemCount: 30,
+    itemBuilder: (_, i) =>
+        ListTile(title: Text('Row $i of ${context.read<ItemBloc>().state}')),
+  ),
+);
 
 Widget homeBody() => Scaffold(
-      appBar: AppBar(title: const Text('Home')),
-      body: ListView.builder(
-        itemCount: 30,
-        itemBuilder: (_, i) => ListTile(title: Text('Item $i')),
-      ),
-    );
+  appBar: AppBar(title: const Text('Home')),
+  body: ListView.builder(
+    itemCount: 30,
+    itemBuilder: (_, i) => ListTile(title: Text('Item $i')),
+  ),
+);
 
 // ── OmniRoute version ──
 class OHome extends OmniStatelessWidget {
   const OHome({super.key});
-  @override String get screenName => 'Home';
-  @override List<Provide> get provide => const [Provide<ListBloc>()];
-  @override Widget build(BuildContext context) => homeBody();
+  @override
+  String get screenName => 'Home';
+  @override
+  List<Provide> get provide => const [Provide<ListBloc>()];
+  @override
+  Widget build(BuildContext context) => homeBody();
 }
 
 class OItem extends OmniStatelessWidget {
   const OItem(this.id, {super.key});
   final int id;
-  @override String get screenName => 'Item';
-  @override List<Provide> get provide => [Provide<ItemBloc>.create((_) => ItemBloc(id))];
-  @override Widget build(BuildContext context) => itemBody(id, context);
+  @override
+  String get screenName => 'Item';
+  @override
+  List<Provide> get provide => [Provide<ItemBloc>.create((_) => ItemBloc(id))];
+  @override
+  Widget build(BuildContext context) => itemBody(id, context);
 }
 
 Widget omniApp() => OmniApp(
-      blocs: [OmniBloc<ListBloc>((_) => ListBloc())],
-      routes: [
-        OmniPage('/', (_) => const OHome()),
-        OmniPage('/item/:id', (p) => OItem(p.pathInt('id'))),
-      ],
-      builder: (_, r) => MaterialApp.router(routerConfig: r),
-    );
+  blocs: [OmniBloc<ListBloc>((_) => ListBloc())],
+  routes: [
+    OmniPage('/', (_) => const OHome()),
+    OmniPage('/item/:id', (p) => OItem(p.pathInt('id'))),
+  ],
+  builder: (_, r) => MaterialApp.router(routerConfig: r),
+);
 
 // ── Raw GoRouter version ──
 class RawApp extends StatefulWidget {
@@ -74,29 +78,34 @@ class RawApp extends StatefulWidget {
 }
 
 class RawAppState extends State<RawApp> {
-  final router = GoRouter(routes: [
-    GoRoute(
-      path: '/',
-      pageBuilder: (_, s) => MaterialPage<void>(
-        key: s.pageKey,
-        child: BlocProvider(create: (_) => ListBloc(), child: Builder(builder: (_) => homeBody())),
-      ),
-    ),
-    GoRoute(
-      path: '/item/:id',
-      // Same page type OmniPage uses, so both animate identically.
-      pageBuilder: (_, s) {
-        final id = int.parse(s.pathParameters['id']!);
-        return MaterialPage<void>(
+  final router = GoRouter(
+    routes: [
+      GoRoute(
+        path: '/',
+        pageBuilder: (_, s) => MaterialPage<void>(
           key: s.pageKey,
           child: BlocProvider(
-            create: (_) => ItemBloc(id),
-            child: Builder(builder: (c) => itemBody(id, c)),
+            create: (_) => ListBloc(),
+            child: Builder(builder: (_) => homeBody()),
           ),
-        );
-      },
-    ),
-  ]);
+        ),
+      ),
+      GoRoute(
+        path: '/item/:id',
+        // Same page type OmniPage uses, so both animate identically.
+        pageBuilder: (_, s) {
+          final id = int.parse(s.pathParameters['id']!);
+          return MaterialPage<void>(
+            key: s.pageKey,
+            child: BlocProvider(
+              create: (_) => ItemBloc(id),
+              child: Builder(builder: (c) => itemBody(id, c)),
+            ),
+          );
+        },
+      ),
+    ],
+  );
 
   @override
   void dispose() {
@@ -105,7 +114,8 @@ class RawAppState extends State<RawApp> {
   }
 
   @override
-  Widget build(BuildContext context) => MaterialApp.router(routerConfig: router);
+  Widget build(BuildContext context) =>
+      MaterialApp.router(routerConfig: router);
 }
 
 /// Runs frames by hand (no vsync needed, so it works with a background
@@ -152,7 +162,12 @@ Future<void> main() async {
   await Future<void>.delayed(const Duration(seconds: 2));
   final results = <String, Object>{};
 
-  void run(String key, Widget app, void Function(String) push, void Function() pop) {
+  void run(
+    String key,
+    Widget app,
+    void Function(String) push,
+    void Function() pop,
+  ) {
     final d = FrameDriver(binding);
     d.show(const SizedBox());
     d.settle();
@@ -208,7 +223,12 @@ Future<void> main() async {
   const rounds = int.fromEnvironment('ROUNDS', defaultValue: 3);
   for (var round = 1; round <= rounds; round++) {
     if (mode != 'omni') {
-      run('raw_$round', RawApp(key: rawKey), (l) => rawRouter().push(l), () => rawRouter().pop());
+      run(
+        'raw_$round',
+        RawApp(key: rawKey),
+        (l) => rawRouter().push(l),
+        () => rawRouter().pop(),
+      );
     }
     if (mode != 'raw') {
       run('omni_$round', omniApp(), (l) => OmniRoute.push(l), OmniRoute.pop);

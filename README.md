@@ -48,14 +48,19 @@ OmniRoute শুধু এদের মধ্যে যে বারবার �
 
 ## ১. ইনস্টলেশন
 
+omni_route এখনো pub.dev-এ নেই, তাই GitHub থেকে নির্দিষ্ট release tag দিয়ে যোগ করুন:
+
 ```yaml
 dependencies:
-  omni_route: ^0.2.4
-  flutter_bloc: ^9.1.1   # context.read / BlocBuilder ব্যবহারের জন্য
-  go_router: ^18.1.4     # go_router-এর type (যেমন GoRouterState) সরাসরি লাগলে
+  omni_route:
+    git:
+      url: https://github.com/juwelzan/omni_route.git
+      ref: v0.3.0          # release tag — নতুন version এলে শুধু এটা বদলান
+  flutter_bloc: ^9.1.1     # context.read / BlocBuilder ব্যবহারের জন্য
+  go_router: ^18.1.4       # go_router-এর type (যেমন GoRouterState) সরাসরি লাগলে
 ```
 
-প্রয়োজন: Dart ≥ 3.12, Flutter ≥ 3.44।
+প্রয়োজন: Dart ≥ 3.12, Flutter ≥ 3.44 (go_router 18.1.4-এর নিজের চাহিদা)।
 
 ```dart
 import 'package:omni_route/omni_route.dart';
@@ -1113,19 +1118,33 @@ OmniNetwork হলো এই repo-র **আলাদা** networking package —
 | `omni_network_ws` | WebSocket আর Server-Sent Events (live data) | real-time দরকার হলে |
 | `omni_network_openapi` | OpenAPI/Swagger থেকে model আর endpoint তৈরির CLI | backend-এর OpenAPI spec থাকলে |
 
-> অবস্থা: `0.1.0-dev`, pub.dev-এ publish হয়নি — `path` বা `git` দিয়ে যোগ করুন।
+> অবস্থা: pub.dev-এ publish হয়নি — নিচের মতো `git` দিয়ে যোগ করুন।
+
+একই GitHub repo-র `packages/` ফোল্ডার থেকে, প্রতিটা package-এর নিজের release tag দিয়ে:
 
 ```yaml
 dependencies:
   omni_network:
-    path: packages/omni_network
+    git:
+      url: https://github.com/juwelzan/omni_route.git
+      path: packages/omni_network
+      ref: omni_network-v0.1.0
   omni_network_flutter:          # Flutter অ্যাপে (ঐচ্ছিক)
-    path: packages/omni_network_flutter
+    git:
+      url: https://github.com/juwelzan/omni_route.git
+      path: packages/omni_network_flutter
+      ref: omni_network_flutter-v0.1.0
   omni_network_ws:               # WebSocket / SSE (ঐচ্ছিক)
-    path: packages/omni_network_ws
+    git:
+      url: https://github.com/juwelzan/omni_route.git
+      path: packages/omni_network_ws
+      ref: omni_network_ws-v0.1.0
 dev_dependencies:
   omni_network_openapi:          # code generator (ঐচ্ছিক)
-    path: packages/omni_network_openapi
+    git:
+      url: https://github.com/juwelzan/omni_route.git
+      path: packages/omni_network_openapi
+      ref: omni_network_openapi-v0.1.0
 ```
 
 ```dart

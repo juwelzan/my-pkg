@@ -19,9 +19,8 @@ final class GenerationResult {
 /// Parses an OpenAPI document given as JSON or YAML text.
 Map<String, Object?> parseSpec(String text) {
   final trimmed = text.trimLeft();
-  final Object? raw = trimmed.startsWith('{')
-      ? jsonDecode(text)
-      : loadYaml(text);
+  final Object? raw =
+      trimmed.startsWith('{') ? jsonDecode(text) : loadYaml(text);
   final plain = _plain(raw);
   if (plain is! Map<String, Object?>) {
     throw const FormatException('OpenAPI document must be an object');
@@ -36,17 +35,18 @@ Map<String, Object?> parseSpec(String text) {
 }
 
 Object? _plain(Object? v) => switch (v) {
-  YamlMap() ||
-  Map() => {for (final e in (v as Map).entries) '${e.key}': _plain(e.value)},
-  YamlList() || List() => [for (final e in v as List) _plain(e)],
-  _ => v,
-};
+      YamlMap() || Map() => {
+          for (final e in (v as Map).entries) '${e.key}': _plain(e.value)
+        },
+      YamlList() || List() => [for (final e in v as List) _plain(e)],
+      _ => v,
+    };
 
 /// A Dart type for a schema.
 final class _Type {
   const _Type(this.kind, this.name, {this.item, this.nullable = false});
   final String
-  kind; // String,int,double,num,bool,DateTime,class,enum,list,map,any
+      kind; // String,int,double,num,bool,DateTime,class,enum,list,map,any
   final String name; // Dart type without `?`
   final _Type? item;
   final bool nullable;
@@ -55,8 +55,8 @@ final class _Type {
   String get dart => kind == 'any'
       ? 'Object?'
       : nullable
-      ? '$name?'
-      : name;
+          ? '$name?'
+          : name;
 
   String decode(String v) {
     final core = switch (kind) {
@@ -87,14 +87,12 @@ final class _Type {
     return switch (kind) {
       'DateTime' => '$v$q.toIso8601String()',
       'class' || 'enum' => '$v$q.toJson()',
-      'list' =>
-        item!.isPlain
-            ? v
-            : '$v$q.map((e) => ${item!.asNullable(item!.nullable).encode('e')}).toList()',
-      'map' =>
-        item!.isPlain
-            ? v
-            : '$v$q.map((k, e) => MapEntry(k, ${item!.encode('e')}))',
+      'list' => item!.isPlain
+          ? v
+          : '$v$q.map((e) => ${item!.asNullable(item!.nullable).encode('e')}).toList()',
+      'map' => item!.isPlain
+          ? v
+          : '$v$q.map((k, e) => MapEntry(k, ${item!.encode('e')}))',
       _ => v,
     };
   }
@@ -121,7 +119,8 @@ GenerationResult generate(
   Map<String, Object?> spec, {
   String? apiName,
   String source = 'openapi spec',
-}) => _Generator(spec, apiName, source).run();
+}) =>
+    _Generator(spec, apiName, source).run();
 
 final class _Generator {
   _Generator(this.spec, this.apiName, this.source);
@@ -207,8 +206,8 @@ final class _Generator {
       final kind = target['enum'] != null
           ? 'enum'
           : _isObject(target)
-          ? 'class'
-          : null;
+              ? 'class'
+              : null;
       if (kind == null) return _typeOf(target, context, nullable: nullable);
       return _Type(kind, cls, nullable: nullable);
     }
@@ -482,9 +481,8 @@ final class _Generator {
         if (body != null) {
           final content =
               (_resolve(body)['content'] as Map<String, Object?>?) ?? {};
-          final jsonType = content.keys
-              .where((k) => k.contains('json'))
-              .firstOrNull;
+          final jsonType =
+              content.keys.where((k) => k.contains('json')).firstOrNull;
           if (jsonType != null) {
             final schema =
                 (content[jsonType]! as Map)['schema'] as Map<String, Object?>?;

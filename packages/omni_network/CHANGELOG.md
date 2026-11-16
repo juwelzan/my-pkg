@@ -1,3 +1,14 @@
+## Unreleased
+
+- Part of the `omni_route` repository's pub workspace
+  (`resolution: workspace`); one `flutter pub get` at the root resolves it.
+- Added `repository`, `homepage` and `issue_tracker` to `pubspec.yaml`.
+- Releases are tagged `omni_network-vX.Y.Z`.
+- `environment` stays `sdk: ^3.12.0`: the code uses private named
+  parameters, which need Dart 3.12.
+- Dev dependency `test` relaxed to `^1.25.0` so it resolves together with
+  the Flutter SDK's pinned `test_api`.
+
 ## 0.1.0-dev
 
 - Step 1: `OmniNetwork` client with `send(OmniRequest)`; GET/POST/PUT/PATCH/

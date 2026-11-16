@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true          # caches the Flutter SDK
+          pub-cache: true      # caches ~/.pub-cache
+
+      # One resolution for the whole workspace (root + packages/*).
+      - name: Install dependencies
+        run: flutter pub get
+
+      # test/golden/ holds generator output compared byte-for-byte; it is
+      # not hand-formatted on purpose.
+      - name: Format
+        run: >
+          git ls-files '*.dart' | grep -v '/test/golden/' |
+          xargs dart format --output=none --set-exit-if-changed
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test omni_route
+        run: flutter test
+
+      - name: Test example
+        working-directory: example
+        run: flutter test
+
+      - name: Test omni_network
+        working-directory: packages/omni_network
+        run: flutter test
+
+      - name: Test omni_network_flutter
+        working-directory: packages/omni_network_flutter
+        run: flutter test
+
+      - name: Test omni_network_ws
+        working-directory: packages/omni_network_ws
+        run: flutter test
+
+      - name: Test omni_network_openapi
+        working-directory: packages/omni_network_openapi
+        run: flutter test
+
+      # Packages still have `publish_to: none` until the first pub.dev
+      # release, which makes the dry run fail by design; report, don't block.
+      - name: Publish dry run
+        continue-on-error: true
+        run: |
+          status=0
+          for dir in . packages/omni_network packages/omni_network_flutter \
+                     packages/omni_network_ws packages/omni_network_openapi; do
+            echo "::group::$dir"
+            (cd "$dir" && dart pub publish --dry-run) || status=1
+            echo "::endgroup::"
+          done
+          exit $status

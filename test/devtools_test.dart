@@ -6,13 +6,23 @@ import 'package:omni_route/omni_route.dart';
 class S extends OmniStatelessWidget {
   const S(this.label, {super.key});
   final String label;
-  @override String get screenName => label;
-  @override Widget build(BuildContext context) => Text(label);
+  @override
+  String get screenName => label;
+  @override
+  Widget build(BuildContext context) => Text(label);
 }
 
-class Home extends S { const Home({super.key}) : super('home'); }
-class Detail extends S { const Detail({super.key}) : super('detail'); }
-class Admin extends S { const Admin({super.key}) : super('admin'); }
+class Home extends S {
+  const Home({super.key}) : super('home');
+}
+
+class Detail extends S {
+  const Detail({super.key}) : super('detail');
+}
+
+class Admin extends S {
+  const Admin({super.key}) : super('admin');
+}
 
 bool isAdmin = false;
 
@@ -24,21 +34,33 @@ final roleGuard = OmniGuard.fn((c, s) {
 });
 
 Widget app(List<OmniNavigation> events, {bool log = false}) => OmniApp(
-      guards: [roleGuard],
-      onNavigate: events.add,
-      logNavigation: log,
+  guards: [roleGuard],
+  onNavigate: events.add,
+  logNavigation: log,
+  routes: [
+    OmniPage('/', (_) => const Home(), name: 'home'),
+    OmniPage(
+      '/admin',
+      (_) => const Admin(),
+      metadata: const {
+        'roles': ['admin'],
+        'title': 'Admin',
+      },
+    ),
+    OmniShell(
+      builder: (_, _, child) => child,
       routes: [
-        OmniPage('/', (_) => const Home(), name: 'home'),
-        OmniPage('/admin', (_) => const Admin(), metadata: const {'roles': ['admin'], 'title': 'Admin'}),
-        OmniShell(
-          builder: (_, _, child) => child,
-          routes: [
-            OmniPage('/items/:id', (_) => const Detail(), name: 'item', metadata: const {'section': 'items'}),
-          ],
+        OmniPage(
+          '/items/:id',
+          (_) => const Detail(),
+          name: 'item',
+          metadata: const {'section': 'items'},
         ),
       ],
-      builder: (_, r) => MaterialApp.router(routerConfig: r),
-    );
+    ),
+  ],
+  builder: (_, r) => MaterialApp.router(routerConfig: r),
+);
 
 void main() {
   setUp(() => isAdmin = false);
@@ -59,20 +81,28 @@ void main() {
     expect(OmniRoute.state.metadata['roles'], ['admin']);
   });
 
-  testWidgets('stack lists pages bottom to top, through shells and pushes', (t) async {
+  testWidgets('stack lists pages bottom to top, through shells and pushes', (
+    t,
+  ) async {
     await t.pumpWidget(app([]));
     await t.pumpAndSettle();
     OmniRoute.push('/items/1');
     await t.pumpAndSettle();
     OmniRoute.push('/items/2');
     await t.pumpAndSettle();
-    expect(OmniRoute.stack.map((e) => e.location), ['/', '/items/1', '/items/2']);
+    expect(OmniRoute.stack.map((e) => e.location), [
+      '/',
+      '/items/1',
+      '/items/2',
+    ]);
     expect(OmniRoute.stack.map((e) => e.screen), [Home, Detail, Detail]);
     expect(OmniRoute.stack.last.metadata['section'], 'items');
     expect(OmniRoute.current.name, 'item');
   });
 
-  testWidgets('onNavigate: initial, go, push, pop, redirect; no duplicates', (t) async {
+  testWidgets('onNavigate: initial, go, push, pop, redirect; no duplicates', (
+    t,
+  ) async {
     final events = <OmniNavigation>[];
     await t.pumpWidget(app(events));
     await t.pumpAndSettle();
@@ -87,15 +117,26 @@ void main() {
     OmniRoute.go('/'); // same location: no event
     await t.pumpAndSettle();
 
-    expect(events.map((e) => e.uri.toString()),
-        ['/', '/items/1?tab=a', '/items/2', '/items/1?tab=a', '/']);
+    expect(events.map((e) => e.uri.toString()), [
+      '/',
+      '/items/1?tab=a',
+      '/items/2',
+      '/items/1?tab=a',
+      '/',
+    ]);
     expect(events.first.from, isNull);
     expect(events[2].from!.location, '/items/1');
     expect(events[2].to.screen, Detail);
-    expect(events.last.to.screen, Home, reason: 'reports where the user ended up');
+    expect(
+      events.last.to.screen,
+      Home,
+      reason: 'reports where the user ended up',
+    );
   });
 
-  testWidgets('logNavigation prints in debug; listener removed on dispose', (t) async {
+  testWidgets('logNavigation prints in debug; listener removed on dispose', (
+    t,
+  ) async {
     final printed = <String>[];
     final old = debugPrint;
     debugPrint = (m, {wrapWidth}) => printed.add(m ?? '');

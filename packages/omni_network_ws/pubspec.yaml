@@ -1,7 +1,12 @@
 name: omni_network_ws
 description: "Server-Sent Events and WebSocket adapters for OmniNetwork (pure Dart)."
 version: 0.1.0-dev
+repository: https://github.com/juwelzan/omni_route/tree/main/packages/omni_network_ws
+homepage: https://github.com/juwelzan/omni_route/tree/main/packages/omni_network_ws
+issue_tracker: https://github.com/juwelzan/omni_route/issues
 publish_to: none
+
+resolution: workspace
 
 environment:
   sdk: ^3.12.0
@@ -14,4 +19,4 @@ dependencies:
 
 dev_dependencies:
   lints: ^6.1.0
-  test: ^1.33.0
+  test: ^1.25.0

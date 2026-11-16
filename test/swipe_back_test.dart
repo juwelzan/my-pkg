@@ -266,6 +266,72 @@ void main() {
     await t.pumpAndSettle();
   });
 
+  testWidgets('right edge: under 50% springs back, a flick pops', (t) async {
+    await open(t, '/a');
+    final g = await t.startGesture(const Offset(795, 300));
+    for (var i = 0; i < 10; i++) {
+      await g.moveBy(const Offset(-25, 0));
+      await t.pump(const Duration(milliseconds: 50));
+    }
+    await t.pump(const Duration(milliseconds: 200));
+    await g.up();
+    await t.pumpAndSettle();
+    expect(OmniRoute.current.location, '/a');
+
+    await t.flingFrom(const Offset(795, 300), const Offset(-200, 0), 2000);
+    await t.pumpAndSettle();
+    expect(OmniRoute.current.location, '/');
+  });
+
+  testWidgets('a cancelled gesture stops the user gesture', (t) async {
+    await open(t, '/a');
+    final nav = t.state<NavigatorState>(find.byType(Navigator).last);
+    final g = await t.startGesture(const Offset(5, 300));
+    await g.moveBy(const Offset(200, 0));
+    await t.pump();
+    expect(nav.userGestureInProgress, isTrue);
+    await g.cancel();
+    await t.pumpAndSettle();
+    expect(nav.userGestureInProgress, isFalse);
+    expect(OmniRoute.current.location, '/a');
+    // A new swipe works afterwards.
+    await slowDrag(t, const Offset(5, 300), 500);
+    expect(OmniRoute.current.location, '/');
+  });
+
+  testWidgets('onNavigate reports a swipe pop', (t) async {
+    final navs = <String>[];
+    await t.pumpWidget(
+      OmniApp(
+        swipeBack: OmniSwipeBack.zoomCard,
+        pageType: OmniPages.fade,
+        onNavigate: (n) => navs.add('${n.from?.location}->${n.to.location}'),
+        routes: [
+          OmniPage('/', (_) => const Home()),
+          OmniPage('/a', (_) => const S('a')),
+        ],
+        builder: (_, r) => MaterialApp.router(routerConfig: r),
+      ),
+    );
+    await t.pumpAndSettle();
+    OmniRoute.push('/a');
+    await t.pumpAndSettle();
+    await slowDrag(t, const Offset(5, 300), 500);
+    expect(navs.last, '/a->/');
+  });
+
+  for (final mode in OmniSwipeBack.values) {
+    testWidgets('system back still pops with ${mode.name}', (t) async {
+      await t.pumpWidget(app(swipeBack: mode));
+      await t.pumpAndSettle();
+      OmniRoute.push('/a');
+      await t.pumpAndSettle();
+      await t.binding.handlePopRoute();
+      await t.pumpAndSettle();
+      expect(OmniRoute.current.location, '/');
+    }, variant: TargetPlatformVariant.only(TargetPlatform.android));
+  }
+
   group('OmniRoute.open', () {
     testWidgets('no duplicates; pops back to an existing page', (t) async {
       await t.pumpWidget(app());

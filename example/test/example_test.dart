@@ -48,11 +48,7 @@ void main() {
 
     await t.tap(find.text('Students'));
     await t.pumpAndSettle();
-    expect(
-      find.text('Rahim'),
-      findsOneWidget,
-      reason: 'tab kept its stack',
-    );
+    expect(find.text('Rahim'), findsOneWidget, reason: 'tab kept its stack');
 
     await t.tap(find.text('Settings'));
     await t.pumpAndSettle();
