@@ -18,7 +18,10 @@ No API changes; purely additive. Everything new is off by default.
   a framed block per event with time, time since start, level emoji and
   aligned `from`/`to` rows with the screen class. Debug builds only.
   Replace `OmniRoute.logger` to change the format or the destination. The
-  old one-line `[OmniRoute] ...` text is gone.
+  old one-line `[OmniRoute] ...` text is gone. Colours are used only where
+  the console shows them (not in phone/simulator logs, where they appeared
+  as `\^[[38;5;12m`). Routes declared without a screen type show their
+  name instead of `OmniScreen`.
 - The edge swipe and the system gesture share one settle path; only the
   page on top of everything (go_router's top page, in a visible tab) takes
   the system gesture.

@@ -8,6 +8,15 @@
   redacted.
 - New `PrettyLogSink(logger:)` to send the blocks to your own `Logger`.
   `PrettyLogSink(printer:)` keeps the classic self-framed text block.
+- Long JSON responses are indented even when the log cut them off (bodies
+  over 16,000 characters used to print as one huge line); the cut is shown
+  on its own line (`… truncated (N chars in total)`).
+- New `LogOptions(maxLineLength:)` (default 120): longer body lines, such as
+  long HTML or base64 values, end in `…` (never inside an emoji). Also keeps
+  lines under the iOS console's per-line limit.
+- Fix: cancelling `downloadToFile` now waits until the `.part` file is
+  closed before throwing `CancelledFailure`, so a `resume: true` right
+  after starts from the real length.
 
 ## 0.1.0
 

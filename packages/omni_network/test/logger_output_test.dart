@@ -101,4 +101,75 @@ void main() {
     expect(plain(out.single), startsWith('┌'));
     expect(out.single, isNot(contains('💡')));
   });
+
+  group('long responses stay readable', () {
+    test('cut-off JSON is still indented, strings kept intact', () {
+      final lines = PrettyLogSink.indentJsonText(
+        '{"remark":"blogs","data":{"blogs":[{"id":565,"title":"a, b: {c}",'
+        '"tags":[]},{"id":566,"desc":"<p style=\\"x\\">h',
+      );
+      expect(lines, [
+        '{',
+        '  "remark": "blogs",',
+        '  "data": {',
+        '    "blogs": [',
+        '      {',
+        '        "id": 565,',
+        '        "title": "a, b: {c}",',
+        '        "tags": []',
+        '      },',
+        '      {',
+        '        "id": 566,',
+        '        "desc": "<p style=\\"x\\">h',
+      ]);
+    });
+
+    test('a big response: indented, long lines clipped, cut marked', () async {
+      final html =
+          '<p style="font-family:Times New Roman;">🚨 ${'news ' * 200}</p>';
+      final mock = OmniMock(basePath: '/v1')
+        ..get(
+          '/blogs',
+          (_) => MockResponse.json({
+            'remark': 'blogs',
+            'data': {
+              'blogs': [
+                for (var i = 0; i < 30; i++)
+                  {'id': 565 + i, 'title': '🚨 BREAKING', 'description': html},
+              ],
+            },
+          }),
+        );
+      final out = <String>[];
+      final api = OmniNetwork(
+        baseUrl: 'https://api.test/v1',
+        transport: mock,
+        enableLogging: true,
+        logSink: PrettyLogSink(
+          options: const LogOptions(colors: false, maxLines: 100),
+          printer: out.add,
+        ),
+      );
+      addTearDown(api.close);
+      await api.get<void>('/blogs');
+      final lines = out.single
+          .split('\n')
+          .map((l) => l.replaceFirst('│ ', ''))
+          .toList();
+      expect(lines, contains('{'));
+      expect(lines, contains('  "remark": "blogs",'));
+      expect(lines, contains('        "id": 565,'));
+      expect(
+        lines.any((l) => l.startsWith('… truncated (')),
+        isTrue,
+        reason: 'redactor cut is marked on its own line',
+      );
+      for (final l in lines) {
+        expect(l.runes.length, lessThanOrEqualTo(121 + 2), reason: l);
+      }
+      final desc = lines.firstWhere((l) => l.contains('"description"'));
+      expect(desc, endsWith('…'));
+      expect(desc, contains('🚨'), reason: 'emoji not split');
+    });
+  });
 }

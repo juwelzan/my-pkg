@@ -152,6 +152,7 @@ OmniNetwork(
     requestBody: true,   // default true
     responseBody: true,  // default true
     maxLines: 30,        // then "… N more lines"
+    maxLineLength: 120,  // longer lines (long HTML/base64 values) end in "…"
     colors: null,        // null = auto
   ),
 );

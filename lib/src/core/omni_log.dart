@@ -1,6 +1,9 @@
 import 'package:logger/logger.dart';
 import 'package:meta/meta.dart';
 
+import '../screens/omni_screen.dart';
+import 'omni_log_colors_stub.dart'
+    if (dart.library.io) 'omni_log_colors_io.dart';
 import 'omni_route_entry.dart';
 
 /// OmniRoute's default logger: debug builds only, one framed block per
@@ -22,6 +25,9 @@ Logger defaultOmniLogger({LogOutput? output}) => Logger(
     methodCount: 0, // no stack trace for normal events
     errorMethodCount: 6, // short trace for errors
     lineLength: 72,
+    // Colours only where they render; phone/simulator logs would show the
+    // raw escape codes.
+    colors: consoleSupportsColors(),
     dateTimeFormat: DateTimeFormat.onlyTimeAndSinceStart,
   ),
   output: output,
@@ -47,5 +53,11 @@ String navigationMessage(OmniNavigation n) {
   ].join('\n');
 }
 
-String _screen(OmniRouteEntry? e) =>
-    e == null ? '' : (e.screen?.toString() ?? e.name ?? '');
+// The screen class, or the route name when the route was declared without
+// a specific screen type (`OmniPage` inferred as `OmniPage<OmniScreen>`).
+String _screen(OmniRouteEntry? e) {
+  if (e == null) return '';
+  final screen = e.screen;
+  if (screen != null && screen != OmniScreen) return '$screen';
+  return e.name ?? '';
+}

@@ -72,6 +72,28 @@ uri   /settings/profile?tab=2''');
     expect(msg.split('\n')[1], 'from  (app start)');
   });
 
+  test('a generic OmniScreen type shows the route name instead', () {
+    final msg = navigationMessage(
+      OmniNavigation(
+        from: const OmniRouteEntry(location: '/blogs/565', screen: String),
+        to: const OmniRouteEntry(
+          location: '/blogs',
+          name: 'blogs',
+          screen: OmniScreen,
+        ),
+        uri: Uri.parse('/blogs'),
+      ),
+    );
+    expect(msg.split('\n')[2], 'to    /blogs      blogs');
+    expect(msg, isNot(contains('OmniScreen')));
+  });
+
+  test('no colour codes when the console is not a terminal', () {
+    final out = Capture();
+    defaultOmniLogger(output: out).i('x');
+    expect(out.text, isNot(contains('\x1B[')));
+  });
+
   testWidgets('logNavigation prints one framed info block per navigation', (
     t,
   ) async {

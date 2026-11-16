@@ -1228,11 +1228,12 @@ final class OmniNetwork {
       });
     }
     final watch = Stopwatch()..start();
+    final target = t?.target;
+    Future<OmniRawResponse>? work;
     try {
       kick();
-      final target = t?.target;
       final response = await Future.any<OmniRawResponse>([
-        Future.sync(
+        work = Future.sync(
           () => target == null
               ? (deduplicate &&
                         outgoing.method == HttpMethod.get &&
@@ -1249,6 +1250,13 @@ final class OmniNetwork {
       return response.finish(duration: watch.elapsed, requestUri: uri);
     } on OmniNetworkException catch (e) {
       if (e is CancelledFailure && signal.isCancelled) {
+        // A cancelled download is still closing its `.part` file; wait for
+        // that so a resume right after starts from the real length.
+        if (target != null && work != null) {
+          await work
+              .then<void>((_) {}, onError: (Object _) {})
+              .timeout(const Duration(seconds: 5), onTimeout: () {});
+        }
         final reason = await signal.whenCancelled;
         if (reason == _Reason.timeout) throw TimeoutFailure(limit!, uri: uri);
         if (reason == _Reason.idle) throw TimeoutFailure(idleLimit, uri: uri);

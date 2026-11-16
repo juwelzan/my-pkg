@@ -19,6 +19,7 @@ final class LogOptions {
     this.maxLines = 30,
     this.colors,
     this.width = 60,
+    this.maxLineLength = 120,
   });
 
   /// Print request and response headers (redacted).
@@ -38,6 +39,11 @@ final class LogOptions {
 
   /// Width of the frame lines.
   final int width;
+
+  /// Longest body line in characters; longer lines (e.g. a long HTML or
+  /// base64 value) end in `…`. Also keeps lines under the iOS console's
+  /// per-line limit.
+  final int maxLineLength;
 }
 
 /// Prints each call as one block: method and URL, then status, time, size
@@ -131,16 +137,31 @@ final class PrettyLogSink implements LogSink {
       ? '${(bytes / 1024).toStringAsFixed(1)} KB'
       : '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
 
+  // The redactor appends this when it cuts a long body.
+  static final _truncatedTail = RegExp(r'… \((\d+) chars, truncated\)$');
+
   List<String> _body(String text) {
-    var lines = text.split('\n');
-    try {
-      final parsed = jsonDecode(text);
-      if (parsed is Map || parsed is List) {
-        lines = const JsonEncoder.withIndent('  ').convert(parsed).split('\n');
-      }
-    } on FormatException {
-      // Not JSON (or truncated): print as is.
+    var body = text;
+    String? tail;
+    if (_truncatedTail.firstMatch(body) case final m?) {
+      body = body.substring(0, m.start);
+      tail = '… truncated (${m.group(1)} chars in total)';
     }
+    List<String> lines;
+    try {
+      final parsed = jsonDecode(body);
+      lines = parsed is Map || parsed is List
+          ? const JsonEncoder.withIndent('  ').convert(parsed).split('\n')
+          : body.split('\n');
+    } on FormatException {
+      // Cut-off or not JSON: indent it anyway when it looks like JSON, so a
+      // long response is still readable.
+      final t = body.trimLeft();
+      lines = t.startsWith('{') || t.startsWith('[')
+          ? indentJsonText(t)
+          : body.split('\n');
+    }
+    lines = [for (final l in lines) _clip(l)];
     if (lines.length > options.maxLines) {
       final more = lines.length - options.maxLines;
       lines = [
@@ -148,6 +169,81 @@ final class PrettyLogSink implements LogSink {
         '… $more more line${more == 1 ? '' : 's'}',
       ];
     }
+    return [...lines, ?tail];
+  }
+
+  // Cuts by characters (runes), never inside an emoji.
+  String _clip(String line) {
+    final runes = line.runes;
+    if (runes.length <= options.maxLineLength) return line;
+    return '${String.fromCharCodes(runes.take(options.maxLineLength))}…';
+  }
+
+  /// Indents JSON text two spaces per level without parsing it, so it also
+  /// works on JSON that was cut off. Strings (and their escapes) are kept
+  /// as they are. Visible for tests.
+  @visibleForTesting
+  static List<String> indentJsonText(String text) {
+    final lines = <String>[];
+    final line = StringBuffer();
+    var depth = 0;
+    var inString = false;
+    var escaped = false;
+    void newLine() {
+      if (line.isNotEmpty) lines.add(line.toString());
+      line
+        ..clear()
+        ..write('  ' * depth);
+    }
+
+    for (var i = 0; i < text.length; i++) {
+      final c = text[i];
+      if (inString) {
+        line.write(c);
+        if (escaped) {
+          escaped = false;
+        } else if (c == r'\') {
+          escaped = true;
+        } else if (c == '"') {
+          inString = false;
+        }
+        continue;
+      }
+      switch (c) {
+        case '"':
+          inString = true;
+          line.write(c);
+        case '{' || '[':
+          // Empty {} / []: keep on one line.
+          var j = i + 1;
+          while (j < text.length && text[j].trim().isEmpty) {
+            j++;
+          }
+          final close = c == '{' ? '}' : ']';
+          if (j < text.length && text[j] == close) {
+            line.write('$c$close');
+            i = j;
+          } else {
+            line.write(c);
+            depth++;
+            newLine();
+          }
+        case '}' || ']':
+          depth = depth > 0 ? depth - 1 : 0;
+          newLine();
+          line.write(c);
+        case ',':
+          line.write(c);
+          newLine();
+        case ':':
+          line.write(': ');
+        case ' ' || '\n' || '\r' || '\t':
+          break;
+        default:
+          line.write(c);
+      }
+    }
+    if (line.toString().trim().isNotEmpty) lines.add(line.toString());
     return lines;
   }
 
