@@ -9,6 +9,7 @@ import '../screens/omni_screen.dart';
 import '../screens/omni_screen_host.dart';
 import '../core/omni_app_features.dart';
 import 'omni_params.dart';
+import 'omni_swipe_back.dart';
 import 'omni_title.dart';
 
 /// Builds a screen from the current route parameters.
@@ -91,8 +92,9 @@ abstract final class OmniPages {
   // per frame). Animations use `animation.drive(...)`, so nothing is
   // allocated per frame and nothing needs disposing.
   //
-  // Custom transitions replace the platform's: iOS swipe-back and Android
-  // predictive back need `material` or `cupertino`.
+  // Custom transitions replace the platform's iOS swipe-back; add it back
+  // with `swipeBack:` (or `OmniApp(swipeBack:)` for every animated page).
+  // The system back button and Android back gesture keep working.
 
   /// Default open duration of the built-in transitions.
   static const defaultDuration = Duration(milliseconds: 250);
@@ -146,10 +148,14 @@ abstract final class OmniPages {
     Duration duration = defaultDuration,
     Duration reverseDuration = defaultReverseDuration,
     Curve curve = Curves.easeOutCubic,
+    OmniSwipeBack? swipeBack,
+    OmniSwipeBackStyle? swipeBackStyle,
   }) => custom(
     _builderFor(kind, CurveTween(curve: curve)),
     duration: duration,
     reverseDuration: reverseDuration,
+    swipeBack: swipeBack,
+    swipeBackStyle: swipeBackStyle,
   );
 
   /// Your own transition. [builder] has the same signature as Flutter's
@@ -167,6 +173,9 @@ abstract final class OmniPages {
   ///
   /// [opaque] false + [barrierColor] give a dialog-style page with the
   /// previous page visible behind it.
+  ///
+  /// [swipeBack] lets the page be closed by an edge swipe (null = the
+  /// `OmniApp(swipeBack:)` default, which is off); [swipeBackStyle] tunes it.
   static OmniPageType custom(
     OmniTransitionBuilder builder, {
     Duration duration = defaultDuration,
@@ -175,8 +184,10 @@ abstract final class OmniPages {
     Color? barrierColor,
     bool barrierDismissible = false,
     bool fullscreenDialog = false,
+    OmniSwipeBack? swipeBack,
+    OmniSwipeBackStyle? swipeBackStyle,
   }) =>
-      (key, name, child) => CustomTransitionPage<void>(
+      (key, name, child) => OmniSwipeBackPage<void>(
         key: key,
         name: name,
         restorationId: _restorationId(key),
@@ -187,6 +198,8 @@ abstract final class OmniPages {
         barrierDismissible: barrierDismissible,
         fullscreenDialog: fullscreenDialog,
         transitionsBuilder: builder,
+        swipeBack: swipeBack,
+        swipeBackStyle: swipeBackStyle,
         child: child,
       );
 

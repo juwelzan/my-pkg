@@ -89,6 +89,11 @@ class ExampleApp extends StatelessWidget {
       context,
     )?.showSnackBar(const SnackBar(content: Text('Press back again to exit'))),
     restorationScopeId: 'router', // restore the route stack after restart
+    // Fade between pages; swipe from either edge to close with a zoom-out.
+    pageType: OmniPages.transition(
+      OmniTransition.fade,
+      swipeBack: OmniSwipeBack.zoom,
+    ),
     blocs: [
       // Global Blocs: created once, live for the whole app.
       OmniBloc<AuthBloc>((_) => AuthBloc(), global: true, lazy: false),
@@ -260,7 +265,7 @@ class StudentListScreen extends OmniStatelessWidget {
           for (var i = 0; i < students.length; i++)
             ListTile(
               title: Text(students[i]),
-              onTap: () => OmniRoute.push('/students/${101 + i}'),
+              onTap: () => OmniRoute.open('/students/${101 + i}'),
             ),
         ],
       ),
@@ -289,7 +294,7 @@ class StudentDetailScreen extends OmniStatelessWidget {
             child: const Text('Mark present'),
           ),
           TextButton(
-            onPressed: () => OmniRoute.push('/students/$id/edit'),
+            onPressed: () => OmniRoute.open('/students/$id/edit'),
             child: const Text('Edit'),
           ),
         ],

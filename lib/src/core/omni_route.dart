@@ -104,6 +104,38 @@ abstract final class OmniRoute {
     return true;
   }
 
+  /// Open [location] without duplicating pages, so apps can navigate with
+  /// push (keeping a page behind for back / swipe-back) everywhere:
+  ///
+  /// - already on top: nothing (a different query on the top page replaces
+  ///   it);
+  /// - already in the stack: pops back to it;
+  /// - otherwise pushes it, unless the stack already holds [maxDepth] pages,
+  ///   then [go]es there (resets the stack).
+  static Future<T?> open<T extends Object?>(
+    String location, {
+    Object? extra,
+    int maxDepth = 10,
+  }) async {
+    final target = Uri.parse(location);
+    if (OmniRoute.location == target) return null;
+    final stack = OmniRoute.stack;
+    final index = stack.lastIndexWhere((e) => e.location == target.path);
+    if (index >= 0) {
+      for (var i = stack.length - 1; i > index && router.canPop(); i--) {
+        if (OmniRoute.location.path == target.path) break;
+        router.pop<Object?>();
+      }
+      if (OmniRoute.location != target) replace(location, extra: extra);
+      return null;
+    }
+    if (stack.length >= maxDepth) {
+      go(location, extra: extra);
+      return null;
+    }
+    return push<T>(location, extra: extra);
+  }
+
   /// Re-run redirects and guards for the current location, e.g. after
   /// state they read has changed without a guard refresh stream.
   static void refresh() => router.refresh();

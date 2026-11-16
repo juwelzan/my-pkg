@@ -1,3 +1,25 @@
+## 0.2.5
+
+No API changes; purely additive. Swipe-back is off by default, so existing
+apps behave exactly as before.
+
+- New edge swipe-back for every animated page type (`OmniPages.fade`,
+  `slide`, ..., `transition(...)`, `custom(...)`), as a separate gesture
+  layer: `OmniPages.transition(kind, swipeBack:)`,
+  `OmniPages.custom(builder, swipeBack:)`, and the app-wide default
+  `OmniApp(swipeBack:, swipeBackStyle:)`.
+- Styles `OmniSwipeBack.none` / `slide` / `zoom` (scale to 0.82, rounded
+  corners, fade in the last 25%); tuning via `OmniSwipeBackStyle` (min
+  scale, corner radius, slide factor, edge width, close threshold, fling
+  velocity, edges, curves).
+- Same enable rules as Flutter's Cupertino back gesture (respects
+  `PopScope`); pops through go_router so `OmniRoute.stack`, logs and
+  `OmniLifecycle` hooks stay correct; plain slide under reduced motion.
+- New `OmniRoute.open(location, maxDepth:)`: push without duplicates (pops
+  back to a page already in the stack, `go` when the stack is too deep).
+- New public types `OmniSwipeBack`, `OmniSwipeBackStyle`, `OmniSwipeEdge`,
+  `OmniSwipeBackPage` (a `CustomTransitionPage`).
+
 ## 0.2.4
 
 No API changes; purely additive.

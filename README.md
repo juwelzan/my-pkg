@@ -491,6 +491,12 @@ OmniRoute.goNamed('students');
 OmniRoute.pushNamed('student', path: {'id': '101'});
 OmniRoute.replaceNamed('login');
 
+// ── open: duplicate ছাড়া খোলা (0.2.5) ──────────────────────
+OmniRoute.open('/students/101');
+// উপরেই থাকলে কিছু হয় না; stack-এ আগে থেকে থাকলে সেখানে pop করে ফেরে;
+// না থাকলে push; stack-এ ১০টা (maxDepth) পেজ হয়ে গেলে go (stack নতুন করে)
+OmniRoute.open('/cart', maxDepth: 6);
+
 // ── অন্যান্য ─────────────────────────────────────────────
 OmniRoute.refresh();   // বর্তমান পেজের guard আবার চালাও
 OmniRoute.location;    // এখনকার URL (push করা পেজ সহ)
@@ -504,6 +510,7 @@ OmniRoute.router;      // আসল GoRouter — বাকি সব কাজ�
 | Login সফল হলে login পেজ সরিয়ে home | `go` বা `replace` |
 | Form থেকে ফলাফল নিয়ে ফেরা | `push<T>` + `pop(result)` |
 | প্রথম পেজে back বাটন (crash এড়াতে) | `maybePop` |
+| একই পেজ দুবার না জমিয়ে খোলা (swipe-back-এর জন্য ভালো) | `open` |
 
 > একাধিক `OmniApp` একসাথে থাকলে (যেমন desktop-এর কয়েকটা window) `OmniRoute.*` সবশেষে
 > চালু হওয়া অ্যাপে কাজ করে। অন্যটার ভিতর থেকে `context.go(...)` ব্যবহার করুন।
@@ -920,9 +927,67 @@ OmniPage('/filter', (_) => const FilterScreen(), pageType: OmniPages.custom(
 > 💡 **দ্রুত রাখার টিপস:** animation-এ `animation.drive(...)` ব্যবহার করুন
 > (প্রতি frame-এ নতুন object তৈরি হয় না); blur বা `ClipPath`-এর মতো ভারী effect এড়িয়ে চলুন।
 >
-> ⚠️ **iOS swipe-back আর Android predictive back** শুধু `material` আর `cupertino`-তে থাকে।
-> custom animation দিলে সেই পেজে এগুলো থাকে না (back বাটন আর system back ঠিকই কাজ করে)।
-> তাই iOS-এ পুরো অ্যাপের জন্য `material` রেখে নির্দিষ্ট route-এ animation দেওয়াই ভালো।
+> ⚠️ **Android predictive back animation** শুধু `material`-এ থাকে। custom animation-এ back বাটন
+> আর system back ঠিকই কাজ করে। custom animation-এ swipe-back চাইলে নিচের **Swipe back** দেখুন।
+
+### Swipe back — কিনারা থেকে টেনে পেজ বন্ধ (0.2.5)
+
+<!-- GIF: docs/swipe_back_zoom.gif (push → অর্ধেক টেনে ছেড়ে দেওয়া → পুরো টেনে zoom-out pop) -->
+![Swipe back zoom](docs/swipe_back_zoom.gif)
+
+আগে custom animation (`fade`, `slide`, `custom`…) দিলে swipe-back থাকত না। এখন যেকোনো animated
+পেজে swipe-back আলাদা layer হিসেবে যোগ করা যায়। এটা ডিফল্টে **বন্ধ**, তাই পুরনো অ্যাপ আগের মতোই চলে।
+
+| Style | কী হয় |
+|---|---|
+| `OmniSwipeBack.none` | gesture নেই (ডিফল্ট) |
+| `OmniSwipeBack.slide` | পেজ আঙুলের সাথে পাশে সরে (iOS-এর মতো) |
+| `OmniSwipeBack.zoom` | পেজ ছোট হয় (১ → ০.৮২), আঙুলের সাথে কিছুটা সরে, কোনা গোল হয়, শেষ ২৫%-এ মিলিয়ে যায় |
+
+```dart
+// ১) পুরো অ্যাপে: সব animated পেজে (fade, slide, transition(...), custom(...)) zoom swipe-back
+OmniApp(
+  pageType: OmniPages.fade,
+  swipeBack: OmniSwipeBack.zoom,
+  ...
+)
+
+// ২) শুধু একটা page type-এ (অ্যাপের ডিফল্ট বন্ধ থাকলেও কাজ করে)
+OmniPage('/student/:id', (p) => StudentScreen(id: p.pathInt('id')),
+  pageType: OmniPages.transition(OmniTransition.fade, swipeBack: OmniSwipeBack.zoom),
+);
+OmniPages.custom(myBuilder, swipeBack: OmniSwipeBack.slide);
+
+// ৩) কোনো পেজে বন্ধ রাখা (অ্যাপের ডিফল্ট চালু থাকলেও)
+OmniPages.transition(OmniTransition.slideUp, swipeBack: OmniSwipeBack.none);
+
+// ৪) নিজের মতো সংখ্যা
+OmniApp(
+  swipeBack: OmniSwipeBack.zoom,
+  swipeBackStyle: const OmniSwipeBackStyle(
+    minScale: 0.88,        // পুরো টানলে কত ছোট হবে
+    maxRadius: 20,         // কোনার সর্বোচ্চ গোলভাব (px)
+    slideFactor: 0.45,     // আঙুলের দূরত্বের কত অংশ পেজ সরবে
+    edgeWidth: 28,         // কিনারার কতটা জায়গা থেকে শুরু করা যাবে (safe area বড় হলে সেটা)
+    closeThreshold: 0.5,   // অর্ধেকের বেশি টানলে বন্ধ
+    flingVelocity: 1.0,    // দ্রুত টানলে (screen-width/second) কম টানলেও বন্ধ
+    edges: {OmniSwipeEdge.left}, // শুধু বাম কিনারা
+  ),
+  ...
+)
+```
+
+**কীভাবে কাজ করে**
+- বাম বা ডান কিনারা থেকে শুরু করতে হয়; ভেতরের দিকে টানলে বন্ধ হয়, উল্টো দিকে কিছু হয় না।
+- ছেড়ে দিলে: অর্ধেকের বেশি টানা হলে বা জোরে flick করলে পেজ বন্ধ, নইলে `easeOutBack` দিয়ে ফিরে আসে।
+- কিনারার জায়গায় tap করলে নিচের বাটন ঠিকই tap পায়।
+- প্রথম পেজে, `PopScope(canPop: false)`-এ, `fullscreenDialog`-এ, অন্য animation চলার সময় gesture চলে না।
+- বন্ধ হয় go_router দিয়ে, তাই `OmniRoute.stack`, log আর `onScreenHidden/onScreenVisible` ঠিক থাকে।
+- system-এ "animation কমাও" চালু থাকলে gesture থাকে, কিন্তু zoom-এর বদলে সাধারণ slide।
+- শুধু `Transform`, `Opacity` আর (কোনা গোল হলে) `ClipRRect` — GPU-তে হালকা।
+
+> 💡 swipe-back-এর জন্য পিছনে একটা পেজ থাকা দরকার। সব জায়গায় `OmniRoute.open(...)` দিয়ে খুললে
+> পিছনে পেজ থাকে, অথচ একই পেজ দুবার জমে না (অধ্যায় ৮ দেখুন)।
 
 ### Back বাটন
 

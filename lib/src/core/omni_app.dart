@@ -9,6 +9,7 @@ import '../bloc/omni_bloc_scope.dart';
 import '../guards/omni_guard.dart';
 import '../routing/omni_page.dart';
 import '../routing/omni_route_registry.dart';
+import '../routing/omni_swipe_back.dart';
 import '../screens/omni_lifecycle.dart';
 import 'omni_app_features.dart';
 import 'omni_desktop_back.dart';
@@ -66,6 +67,8 @@ class OmniApp extends StatefulWidget {
     this.maxTextScale,
     this.blocObserver,
     this.onError,
+    this.swipeBack = OmniSwipeBack.none,
+    this.swipeBackStyle = const OmniSwipeBackStyle(),
   });
 
   /// [OmniPage]s and any raw go_router [RouteBase]s.
@@ -111,6 +114,14 @@ class OmniApp extends StatefulWidget {
   /// Page (transition) used for every [OmniPage] unless it sets its own.
   /// See [OmniPages].
   final OmniPageType pageType;
+
+  /// Default edge swipe-back for animated page types (`OmniPages.fade`,
+  /// `slide`, ..., `transition(...)`, `custom(...)`) that don't set their
+  /// own. Off by default. `material`/`cupertino` keep the platform gesture.
+  final OmniSwipeBack swipeBack;
+
+  /// Default tuning for [swipeBack].
+  final OmniSwipeBackStyle swipeBackStyle;
 
   /// On Windows/Linux/macOS, Alt+← / Cmd+[ / mouse back button go back.
   final bool desktopBack;
@@ -366,20 +377,24 @@ class _OmniAppState extends State<OmniApp> {
       errorBuilder: widget.notFound ?? defaultOmniErrorBuilder,
       exitWindow: widget.doubleBackToExit,
       onExitWarning: widget.onExitWarning,
-      child: OmniGlobalBlocScope(
-        registry: _blocs,
-        child: GuardRefresh(
-          guards: _refreshGuards,
-          notifier: _guardRefresh,
-          child: _wrapApp(
-            Builder(
-              builder: (c) => widget.desktopBack
-                  ? OmniDesktopBack(
-                      router: router,
-                      escape: widget.escapeGoesBack,
-                      child: widget.builder(c, router),
-                    )
-                  : widget.builder(c, router),
+      child: OmniSwipeBackDefaults(
+        mode: widget.swipeBack,
+        style: widget.swipeBackStyle,
+        child: OmniGlobalBlocScope(
+          registry: _blocs,
+          child: GuardRefresh(
+            guards: _refreshGuards,
+            notifier: _guardRefresh,
+            child: _wrapApp(
+              Builder(
+                builder: (c) => widget.desktopBack
+                    ? OmniDesktopBack(
+                        router: router,
+                        escape: widget.escapeGoesBack,
+                        child: widget.builder(c, router),
+                      )
+                    : widget.builder(c, router),
+              ),
             ),
           ),
         ),
