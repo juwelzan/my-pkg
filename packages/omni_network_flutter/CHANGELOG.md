@@ -1,4 +1,6 @@
-## Unreleased
+## 0.1.0
+
+First tagged release (`omni_network_flutter-v0.1.0`); no API changes from 0.1.0-dev.
 
 - Part of the `omni_route` repository's pub workspace
   (`resolution: workspace`); one `flutter pub get` at the root resolves it.

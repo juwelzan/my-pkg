@@ -1,3 +1,34 @@
+## 0.3.0
+
+No breaking API changes; everything new is optional. One deprecation:
+`AnyBloc` (see the README's migration section).
+
+- Repository: pub workspace (one `flutter pub get` at the root resolves the
+  package and `packages/*`), CI on push/PR, `repository`/`homepage`/
+  `issue_tracker` metadata, install from GitHub tags (`ref: v0.3.0`).
+- New `OmniRoute.popUntil(location)`, `OmniRoute.popToRoot()` (one pop per
+  frame; like `Navigator.popUntil` they ignore `PopScope`) and
+  `OmniRoute.openTo<S>()`. `open` no longer pops twice in one frame.
+- Cubits are accepted everywhere a Bloc is (`OmniBloc`, `Provide`,
+  `Provide.value`, `OmniBlocRegistry`, scopes) via the new
+  `OmniAnyBloc = BlocBase<Object?>`. `AnyBloc` is deprecated.
+- New page types `OmniPages.dialog(barrierColor:, barrierDismissible:)` and
+  `OmniPages.bottomSheet(showDragHandle:, isScrollControlled:)`;
+  `await OmniRoute.push<T>(...)` returns the value given to `pop`.
+- `OmniLifecycle` mixed into an `OmniStatefulWidget` (instead of its State)
+  is reported once in debug builds (`OmniErrorCode.lifecycleOnWidget`).
+- `onScreenHidden` now also fires when a visible screen is removed outright
+  (e.g. `go` or app teardown), so every visible has exactly one hidden.
+- Screens with `OmniLifecycle` no longer rebuild on every push/pop above
+  them: visibility is tracked by a tiny child widget.
+- New `OmniApp(titleColor:)`; the app-switcher colour now defaults to the
+  theme's `colorScheme.primary` (black without a Material theme) instead of
+  always black.
+- `dismissKeyboardOnTap` uses the text field's own tap-outside detection
+  (`TapRegion` intents) instead of a root `GestureDetector`, so it no longer
+  joins every tap's gesture arena. Same behaviour: taps outside close the
+  keyboard, scrolls and taps on the field (or its toolbar) don't.
+
 ## 0.2.6
 
 Swipe-back gets 8 visual styles. Additive except for two renames in

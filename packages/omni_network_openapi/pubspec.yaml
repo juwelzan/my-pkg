@@ -1,6 +1,6 @@
 name: omni_network_openapi
 description: "Generates OmniNetwork endpoints and models from OpenAPI 3 specs (dev/CLI tool)."
-version: 0.1.0-dev
+version: 0.1.0
 repository: https://github.com/juwelzan/omni_route/tree/main/packages/omni_network_openapi
 homepage: https://github.com/juwelzan/omni_route/tree/main/packages/omni_network_openapi
 issue_tracker: https://github.com/juwelzan/omni_route/issues

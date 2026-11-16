@@ -1,3 +1,4 @@
+import 'package:flutter/widgets.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:go_router/go_router.dart';
 import 'package:meta/meta.dart';
@@ -122,10 +123,7 @@ abstract final class OmniRoute {
     final stack = OmniRoute.stack;
     final index = stack.lastIndexWhere((e) => e.location == target.path);
     if (index >= 0) {
-      for (var i = stack.length - 1; i > index && router.canPop(); i--) {
-        if (OmniRoute.location.path == target.path) break;
-        router.pop<Object?>();
-      }
+      await _popWhile(() => OmniRoute.location.path != target.path);
       if (OmniRoute.location != target) replace(location, extra: extra);
       return null;
     }
@@ -134,6 +132,48 @@ abstract final class OmniRoute {
       return null;
     }
     return push<T>(location, extra: extra);
+  }
+
+  /// [open] for a screen type, like [to]/[pushTo]: builds the location
+  /// from [path] and [query] parameters. Completes with the pop result
+  /// when it pushed (use [open] with a type for a typed result).
+  static Future<Object?> openTo<S extends OmniScreen>({
+    Map<String, String> path = const {},
+    Map<String, String> query = const {},
+    Object? extra,
+    int maxDepth = 10,
+  }) => open<Object?>(
+    locationOf<S>(path: path, query: query),
+    extra: extra,
+    maxDepth: maxDepth,
+  );
+
+  /// Pop pages until [location] (its path; query ignored) is on top, one
+  /// page per frame; completes when done.
+  /// Returns whether it was found; when it is not in the stack, nothing is
+  /// popped. Ignores `PopScope`, like [popToRoot].
+  static Future<bool> popUntil(String location) async {
+    final path = Uri.parse(location).path;
+    if (!stack.any((e) => e.location == path)) return false;
+    await _popWhile(() => OmniRoute.location.path != path);
+    return OmniRoute.location.path == path;
+  }
+
+  /// Pop every page that can be popped, back to the first page (of the
+  /// current tab inside a shell).
+  ///
+  /// Like Flutter's `Navigator.popUntil` and [pop], this ignores
+  /// `PopScope(canPop: false)`, which only guards user back actions.
+  static Future<void> popToRoot() => _popWhile(() => true);
+
+  // One pop per frame: go_router's navigator only sees the new page list
+  // after a rebuild, and a second pop in the same frame would complete the
+  // same pushed page twice. Bounded by the stack size, so it always ends.
+  static Future<void> _popWhile(bool Function() keepGoing) async {
+    for (var i = stack.length; i > 0 && keepGoing() && router.canPop(); i--) {
+      router.pop<Object?>();
+      await WidgetsBinding.instance.endOfFrame;
+    }
   }
 
   /// Re-run redirects and guards for the current location, e.g. after

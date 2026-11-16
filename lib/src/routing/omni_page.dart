@@ -203,6 +203,43 @@ abstract final class OmniPages {
         child: child,
       );
 
+  /// Shows the screen as a Material dialog over the current page: the page
+  /// below stays visible behind [barrierColor], and tapping it closes the
+  /// dialog when [barrierDismissible]. The screen builds the dialog itself
+  /// (e.g. an `AlertDialog`); [OmniRoute.pop] returns a value to [push]:
+  ///
+  /// ```dart
+  /// OmniPage('/confirm', (_) => const ConfirmScreen(),
+  ///     pageType: OmniPages.dialog());
+  /// final ok = await OmniRoute.push<bool>('/confirm'); // pop(true) → true
+  /// ```
+  static OmniPageType dialog({
+    Color? barrierColor = Colors.black54,
+    bool barrierDismissible = true,
+  }) =>
+      (key, name, child) => _OmniDialogPage(
+        key: key,
+        name: name,
+        child: child,
+        barrierColor: barrierColor,
+        barrierDismissible: barrierDismissible,
+      );
+
+  /// Shows the screen as a Material modal bottom sheet (drag down or tap
+  /// outside to close). [isScrollControlled] lets the sheet grow past half
+  /// the screen; [showDragHandle] draws the handle (null = theme default).
+  static OmniPageType bottomSheet({
+    bool? showDragHandle,
+    bool isScrollControlled = false,
+  }) =>
+      (key, name, child) => _OmniSheetPage(
+        key: key,
+        name: name,
+        child: child,
+        showDragHandle: showDragHandle,
+        isScrollControlled: isScrollControlled,
+      );
+
   static OmniTransitionBuilder _builderFor(OmniTransition kind, CurveTween c) {
     switch (kind) {
       case OmniTransition.fade:
@@ -263,6 +300,51 @@ abstract final class OmniPages {
   // reuse them so the Navigator can restore the page stack.
   static String? _restorationId(LocalKey key) =>
       key is ValueKey<String> ? key.value : null;
+}
+
+class _OmniDialogPage extends Page<void> {
+  const _OmniDialogPage({
+    super.key,
+    super.name,
+    required this.child,
+    required this.barrierColor,
+    required this.barrierDismissible,
+  });
+
+  final Widget child;
+  final Color? barrierColor;
+  final bool barrierDismissible;
+
+  @override
+  Route<void> createRoute(BuildContext context) => DialogRoute<void>(
+    context: context,
+    settings: this,
+    barrierColor: barrierColor,
+    barrierDismissible: barrierDismissible,
+    builder: (_) => child,
+  );
+}
+
+class _OmniSheetPage extends Page<void> {
+  const _OmniSheetPage({
+    super.key,
+    super.name,
+    required this.child,
+    required this.showDragHandle,
+    required this.isScrollControlled,
+  });
+
+  final Widget child;
+  final bool? showDragHandle;
+  final bool isScrollControlled;
+
+  @override
+  Route<void> createRoute(BuildContext context) => ModalBottomSheetRoute<void>(
+    settings: this,
+    showDragHandle: showDragHandle,
+    isScrollControlled: isScrollControlled,
+    builder: (_) => child,
+  );
 }
 
 /// A route to an OmniRoute screen. Compiles to a plain [GoRoute].
@@ -355,7 +437,11 @@ class OmniPage<S extends OmniScreen> extends GoRoute {
         child: hostScreen(
           screen,
           wrap: config.titles
-              ? (s) => OmniTitle(title: screen.title, child: s)
+              ? (s) => OmniTitle(
+                  title: screen.title,
+                  color: config.titleColor,
+                  child: s,
+                )
               : null,
         ),
       );
@@ -383,6 +469,7 @@ class OmniPageConfig extends InheritedWidget {
     super.key,
     required this.pageType,
     required this.titles,
+    this.titleColor,
     required this.errorBuilder,
     this.exitWindow,
     this.onExitWarning,
@@ -403,6 +490,9 @@ class OmniPageConfig extends InheritedWidget {
   /// Whether pages set the browser/app-switcher title.
   final bool titles;
 
+  /// App-switcher colour, or null for the theme's primary colour.
+  final Color? titleColor;
+
   /// Shows invalid-parameter and not-found errors.
   final OmniErrorBuilder errorBuilder;
 
@@ -421,6 +511,7 @@ class OmniPageConfig extends InheritedWidget {
   bool updateShouldNotify(OmniPageConfig old) =>
       old.pageType != pageType ||
       old.titles != titles ||
+      old.titleColor != titleColor ||
       old.errorBuilder != errorBuilder ||
       old.exitWindow != exitWindow ||
       old.onExitWarning != onExitWarning;

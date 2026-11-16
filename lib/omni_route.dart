@@ -3,7 +3,13 @@
 library;
 
 export 'src/bloc/omni_bloc.dart'
-    show AnyBloc, OmniBloc, OmniBlocCreate, OmniBlocRegistry, Provide;
+    show
+        AnyBloc,
+        OmniAnyBloc,
+        OmniBloc,
+        OmniBlocCreate,
+        OmniBlocRegistry,
+        Provide;
 export 'src/bloc/omni_bloc_scope.dart' hide hostedScreenAbove;
 export 'src/core/omni_app.dart';
 export 'src/core/omni_route.dart';

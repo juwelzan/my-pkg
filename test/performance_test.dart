@@ -166,6 +166,32 @@ void main() {
       '1000-route startup ${startup}ms, avg go+frame ${nav / 100}ms (debug, test env)',
     );
   });
+
+  testWidgets('push/pop above a lifecycle screen does not rebuild it', (
+    t,
+  ) async {
+    _CountedFeed.builds = 0;
+    await t.pumpWidget(
+      OmniApp(
+        routes: [
+          OmniPage('/', (_) => const _CountedFeed()),
+          OmniPage('/other', (_) => const _Other()),
+        ],
+        builder: (_, r) => MaterialApp.router(routerConfig: r),
+      ),
+    );
+    await t.pumpAndSettle();
+    expect(_CountedFeed.builds, 1);
+    for (var i = 0; i < 5; i++) {
+      OmniRoute.push('/other');
+      await t.pumpAndSettle();
+      OmniRoute.pop();
+      await t.pumpAndSettle();
+    }
+    // Visibility still tracked (hooks ran) without rebuilding the screen.
+    expect(_CountedFeed.events, 11);
+    expect(_CountedFeed.builds, 1);
+  });
 }
 
 int _countElements(WidgetTester t) {
@@ -177,4 +203,29 @@ int _countElements(WidgetTester t) {
 
   t.binding.rootElement!.visitChildren(visit);
   return n;
+}
+
+class _CountedFeed extends OmniStatelessWidget with OmniLifecycle {
+  const _CountedFeed();
+  static int builds = 0;
+  static int events = 0;
+  @override
+  String get screenName => 'counted';
+  @override
+  void onScreenVisible(BuildContext c) => events++;
+  @override
+  void onScreenHidden(BuildContext c) => events++;
+  @override
+  Widget build(BuildContext context) {
+    builds++;
+    return const Text('counted');
+  }
+}
+
+class _Other extends OmniStatelessWidget {
+  const _Other();
+  @override
+  String get screenName => 'other';
+  @override
+  Widget build(BuildContext context) => const Text('other');
 }

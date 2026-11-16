@@ -53,7 +53,11 @@ class _OmniStatelessElement extends StatelessElement {
   Widget build() {
     final screen = widget as OmniStatelessWidget;
     validateScreen(screen);
-    _lifecycle?.trackVisibility();
+    final built = _build(screen);
+    return _lifecycle?.wrap(built) ?? built;
+  }
+
+  Widget _build(OmniStatelessWidget screen) {
     if (isHosted(this, screen)) return super.build();
     // Shown outside a route: provide our own Blocs and build the screen
     // with a context below them.

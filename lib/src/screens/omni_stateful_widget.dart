@@ -1,6 +1,9 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
 import 'package:go_router/go_router.dart';
+
+import '../errors/omni_route_exception.dart';
 
 import 'omni_lifecycle.dart';
 import 'omni_screen.dart';
@@ -20,6 +23,10 @@ abstract class OmniStatefulWidget extends StatefulWidget with OmniScreen {
 
 class _OmniStatefulElement extends StatefulElement {
   _OmniStatefulElement(OmniStatefulWidget super.widget);
+
+  // Widget types already reported for OmniLifecycle-on-the-widget, so the
+  // mistake is reported once per type, not on every rebuild or page.
+  static final Set<Type> _reportedLifecycleOnWidget = {};
 
   // Only States that mix in OmniLifecycle get a hub (no cost otherwise).
   OmniLifecycleHub? _lifecycle;
@@ -44,6 +51,25 @@ class _OmniStatefulElement extends StatefulElement {
         ),
       );
     }
+    if (kDebugMode &&
+        screen is OmniLifecycle &&
+        state is! OmniLifecycle &&
+        _reportedLifecycleOnWidget.add(screen.runtimeType)) {
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: OmniRouteException(
+            OmniErrorCode.lifecycleOnWidget,
+            '${screen.runtimeType} mixes in OmniLifecycle, but hooks on a '
+            'stateful screen run on its State, so they would never be called.',
+            hint:
+                'Mix OmniLifecycle into your OmniState instead: '
+                'class _${screen.runtimeType}State extends '
+                'OmniState<${screen.runtimeType}> with OmniLifecycle.',
+          ),
+          library: 'omni_route',
+        ),
+      );
+    }
     if (state is OmniLifecycle) {
       _lifecycle = OmniLifecycleHub(
         this,
@@ -56,8 +82,8 @@ class _OmniStatefulElement extends StatefulElement {
   @override
   Widget build() {
     validateScreen(widget as OmniScreen);
-    _lifecycle?.trackVisibility();
-    return super.build();
+    final built = super.build();
+    return _lifecycle?.wrap(built) ?? built;
   }
 }
 

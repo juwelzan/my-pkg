@@ -33,6 +33,15 @@ void main() {
     expect(find.text('Rahim'), findsOneWidget);
     expect(find.text('Present 1 days'), findsOneWidget);
 
+    // popUntil: from edit straight back to the list.
+    await t.tap(find.text('Edit'));
+    await t.pumpAndSettle();
+    await t.tap(find.text('Back to list'));
+    await t.pumpAndSettle();
+    expect(OmniRoute.location.path, '/students');
+    await t.tap(find.text('Rahim'));
+    await t.pumpAndSettle();
+
     await t.tap(find.text('Settings'));
     await t.pumpAndSettle();
     await t.tap(find.byType(Switch));
@@ -48,13 +57,25 @@ void main() {
 
     await t.tap(find.text('Students'));
     await t.pumpAndSettle();
-    expect(find.text('Rahim'), findsOneWidget, reason: 'tab kept its stack');
+    expect(
+      find.text('Student #101'),
+      findsOneWidget,
+      reason: 'tab kept its stack',
+    );
 
     await t.tap(find.text('Settings'));
     await t.pumpAndSettle();
     OmniRoute.go('/settings');
     await t.pumpAndSettle();
+    // Log out asks first (a dialog route that returns a value).
     await t.tap(find.text('Log out'));
+    await t.pumpAndSettle();
+    await t.tap(find.text('Cancel'));
+    await t.pumpAndSettle();
+    expect(find.text('Dark mode'), findsOneWidget, reason: 'still signed in');
+    await t.tap(find.text('Log out'));
+    await t.pumpAndSettle();
+    await t.tap(find.text('Yes, log out'));
     await t.pumpAndSettle();
     expect(find.text('Log in'), findsOneWidget);
   });

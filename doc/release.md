@@ -68,9 +68,44 @@ lower for the network packages means replacing private named parameters.
 
 ## Branches and tags
 
-- `main` is the release branch.
+- `main` is the only long-lived branch and always holds the latest release
+  or work toward the next one. Feature work happens on short branches
+  merged into `main` through a PR (CI must be green).
 - Every `omni_route` release is tagged `vX.Y.Z` (e.g. `v0.3.0`); every
   sub-package release is tagged `<package>-vX.Y.Z` (e.g.
-  `omni_network-v0.1.0`). Users depend on these tags with `git:` + `ref:`.
+  `omni_network-v0.1.0`). Users depend on these tags with `git:` + `ref:`
+  (and `path: packages/<package>` for sub-packages), so a tag is never moved
+  or deleted once pushed.
 - The repository is a pub workspace: one `flutter pub get` at the root
   resolves the root package and `packages/*`.
+
+## Release steps
+
+1. On `main`, bump `version:` in the package's `pubspec.yaml` and add the
+   CHANGELOG entry (same style as the previous ones).
+2. Update install snippets in README if the tag changes (`ref: vX.Y.Z`,
+   `ref: <package>-vX.Y.Z`).
+3. Run the same checks as CI, from the root:
+   ```bash
+   flutter pub get
+   git ls-files '*.dart' | grep -v '/test/golden/' | xargs dart format --output=none --set-exit-if-changed
+   flutter analyze
+   flutter test            # then in example/ and each packages/* directory
+   dart pub publish --dry-run   # in each package; see "Known dry-run errors"
+   ```
+4. Commit, open a PR, merge when CI is green.
+5. Tag the merge commit and push the tag:
+   ```bash
+   git tag -a v0.3.0 -m "omni_route 0.3.0"
+   git tag -a omni_network-v0.1.0 -m "omni_network 0.1.0"
+   git push origin v0.3.0 omni_network-v0.1.0
+   ```
+   Tag only the packages that changed.
+
+## Known dry-run errors
+
+- `omni_network_flutter` and `omni_network_ws` depend on `omni_network`
+  with `path:`. pub.dev rejects that, but it is what makes the `git:`
+  install work. Switch them to a hosted constraint (`omni_network: ^0.1.0`)
+  in the same release that first publishes `omni_network` to pub.dev.
+- All packages have `publish_to: none` until the first pub.dev release.

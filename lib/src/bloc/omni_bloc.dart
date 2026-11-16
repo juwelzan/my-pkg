@@ -4,19 +4,25 @@ import 'package:meta/meta.dart';
 
 import '../errors/omni_route_exception.dart';
 
-/// Any Bloc. Cubits are intentionally not accepted.
+/// Any Bloc or Cubit OmniRoute can create, provide and close.
+typedef OmniAnyBloc = BlocBase<Object?>;
+
+/// Any Bloc (Cubits excluded). OmniRoute now accepts Cubits too; use
+/// [OmniAnyBloc].
+@Deprecated('Use OmniAnyBloc (also accepts Cubits). Removed in 1.0.0.')
 typedef AnyBloc = Bloc<Object?, Object?>;
 
-/// Factory that creates a Bloc. Use [BuildContext] to read dependencies,
+/// Factory that creates a Bloc or Cubit. Use [BuildContext] to read dependencies,
 /// e.g. `(ctx) => AuthBloc(ctx.read<AuthRepository>())`.
-typedef OmniBlocCreate<B extends AnyBloc> = B Function(BuildContext context);
+typedef OmniBlocCreate<B extends OmniAnyBloc> =
+    B Function(BuildContext context);
 
 /// Registers how to create [B]. Registered once in `OmniApp(blocs: [...])`.
 ///
 /// `global: true` creates one instance for the whole app; otherwise the
 /// factory is used by screens that declare `Provide<B>()`.
 @immutable
-class OmniBloc<B extends AnyBloc> {
+class OmniBloc<B extends OmniAnyBloc> {
   /// Registers [create] as the factory for [B].
   const OmniBloc(this.create, {this.global = false, this.lazy = true});
 
@@ -69,7 +75,7 @@ class OmniBlocRegistry {
   /// The factory for [B].
   ///
   /// Throws [OmniRouteException] if [B] is missing or global.
-  OmniBloc<B> factoryFor<B extends AnyBloc>() {
+  OmniBloc<B> factoryFor<B extends OmniAnyBloc>() {
     final f = _factories[B];
     if (f == null) {
       throw OmniRouteException(
@@ -103,7 +109,7 @@ class OmniBlocRegistry {
 /// List<Provide> get provide => const [Provide<StudentBloc>()];
 /// ```
 @immutable
-class Provide<B extends AnyBloc> {
+class Provide<B extends OmniAnyBloc> {
   /// Created from the registered [OmniBloc] factory. Owned by the screen.
   const Provide({this.lazy = true}) : _create = null, _value = null;
 

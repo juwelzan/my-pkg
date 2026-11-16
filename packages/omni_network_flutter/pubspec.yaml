@@ -1,6 +1,6 @@
 name: omni_network_flutter
 description: "Flutter tools for OmniNetwork: an in-app network inspector."
-version: 0.1.0-dev
+version: 0.1.0
 repository: https://github.com/juwelzan/omni_route/tree/main/packages/omni_network_flutter
 homepage: https://github.com/juwelzan/omni_route/tree/main/packages/omni_network_flutter
 issue_tracker: https://github.com/juwelzan/omni_route/issues

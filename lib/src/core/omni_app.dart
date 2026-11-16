@@ -69,6 +69,7 @@ class OmniApp extends StatefulWidget {
     this.onError,
     this.swipeBack = OmniSwipeBack.none,
     this.swipeBackStyle = const OmniSwipeBackStyle(),
+    this.titleColor,
   });
 
   /// [OmniPage]s and any raw go_router [RouteBase]s.
@@ -122,6 +123,11 @@ class OmniApp extends StatefulWidget {
 
   /// Default tuning for [swipeBack].
   final OmniSwipeBackStyle swipeBackStyle;
+
+  /// Colour of the app in the Android recent-apps switcher (and similar),
+  /// set with each page's title. Null uses the theme's
+  /// `colorScheme.primary` (black without a Material theme).
+  final Color? titleColor;
 
   /// On Windows/Linux/macOS, Alt+← / Cmd+[ / mouse back button go back.
   final bool desktopBack;
@@ -374,6 +380,7 @@ class _OmniAppState extends State<OmniApp> {
     return OmniPageConfig(
       pageType: widget.pageType,
       titles: widget.setTitles,
+      titleColor: widget.titleColor,
       errorBuilder: widget.notFound ?? defaultOmniErrorBuilder,
       exitWindow: widget.doubleBackToExit,
       onExitWarning: widget.onExitWarning,

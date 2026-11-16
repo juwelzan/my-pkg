@@ -33,6 +33,10 @@ enum OmniErrorCode {
 
   /// A configuration OmniRoute does not allow.
   unsupportedConfiguration,
+
+  /// `OmniLifecycle` is mixed into an `OmniStatefulWidget` instead of its
+  /// `OmniState`, so its hooks would never run.
+  lifecycleOnWidget,
 }
 
 /// The single exception type thrown by OmniRoute for configuration and

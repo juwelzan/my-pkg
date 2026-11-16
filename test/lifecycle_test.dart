@@ -218,6 +218,35 @@ void main() {
     expect(log, isEmpty);
   });
 
+  testWidgets('a visible screen that is removed reports hidden', (t) async {
+    for (final initial in ['/', '/player']) {
+      log.clear();
+      await t.pumpWidget(app(initial: initial));
+      await t.pumpAndSettle();
+      // The whole subtree goes away in one frame (no rebuild first).
+      await t.pumpWidget(const SizedBox());
+      final name = initial == '/' ? 'feed' : 'player';
+      expect(log, ['$name:visible', '$name:hidden'], reason: initial);
+    }
+  });
+
+  testWidgets('hidden is reported once when go removes the page', (t) async {
+    await t.pumpWidget(
+      OmniApp(
+        pageType: OmniPages.none,
+        routes: [
+          OmniPage('/', (_) => const Feed()),
+          OmniPage('/other', (_) => const Plain('other')),
+        ],
+        builder: (_, r) => MaterialApp.router(routerConfig: r),
+      ),
+    );
+    await t.pumpAndSettle();
+    OmniRoute.go('/other');
+    await t.pumpAndSettle();
+    expect(log, ['feed:visible', 'feed:hidden']);
+  });
+
   testWidgets('stateless screen outside a route gets hooks too', (t) async {
     await t.pumpWidget(
       const Directionality(textDirection: TextDirection.ltr, child: Feed()),

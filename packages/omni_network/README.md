@@ -8,7 +8,7 @@ final api = OmniNetwork(baseUrl: 'https://api.example.com', enableLogging: true)
 final user = await api.get<User>('/users/10', decoder: User.fromJson);
 ```
 
-> Status: `0.1.0-dev`, not published yet. Depend on it by path or git.
+> Status: `0.1.0`, not on pub.dev yet. Depend on it from GitHub by tag.
 
 - [Start here](#start-here)
 - [Login and tokens](#login-and-tokens)
@@ -26,7 +26,10 @@ final user = await api.get<User>('/users/10', decoder: User.fromJson);
 ```yaml
 dependencies:
   omni_network:
-    path: packages/omni_network   # or a git dependency
+    git:
+      url: https://github.com/juwelzan/omni_route.git
+      path: packages/omni_network
+      ref: omni_network-v0.1.0
 ```
 
 ```dart

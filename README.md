@@ -43,6 +43,7 @@ OmniRoute শুধু এদের মধ্যে যে বারবার �
 19. [Error ও সমাধান](#১৯-error-ও-সমাধান)
 20. [সম্পূর্ণ উদাহরণ](#২০-সম্পূর্ণ-উদাহরণ)
 21. [OmniNetwork — API call (HTTP, Auth, Cache, Upload…)](#২১-omninetwork--api-call-http-auth-cache-upload)
+22. [Migration — 0.2 থেকে 0.3](#migration--02-থেকে-03)
 
 ---
 
@@ -193,6 +194,7 @@ OmniApp(
 
   pageType: OmniPages.material, // page transition (৯ম অংশে বিস্তারিত)
   setTitles: true,              // browser tab-এ screen-এর title বসাবে
+  titleColor: null,             // recent-apps-এ অ্যাপের রঙ; null = theme-এর primary (0.3.0)
   desktopBack: true,            // Desktop-এ Alt+← / Cmd+[ / mouse back
   escapeGoesBack: false,        // Desktop-এ Esc চাপলে back
   restorationScopeId: null,     // state restoration চালু করতে একটা id দিন
@@ -281,7 +283,7 @@ OmniApp(
 |---|---|---|
 | `lifecycle` | root widget-এ `WidgetsBindingObserver` + `addObserver`/`removeObserver` | context দিয়ে global Bloc পড়া যায় |
 | `onInit` + `splash` | `FutureBuilder` + splash screen + guard-এর race condition সামলানো | error হলে report করে অ্যাপ খুলে যায় — splash-এ আটকে থাকে না |
-| `dismissKeyboardOnTap` | `GestureDetector(onTap: () => FocusScope.of(context).unfocus())` | text field-এ tap করলে focus থাকে |
+| `dismissKeyboardOnTap` | `GestureDetector(onTap: () => FocusScope.of(context).unfocus())` | text field-এ tap করলে focus থাকে; scroll করলে keyboard বন্ধ হয় না; 0.3.0 থেকে text field-এর নিজস্ব `TapRegion` দিয়ে, কোনো tap-এ বাধা দেয় না |
 | `doubleBackToExit` | `PopScope` + সময় হিসাব + `SystemNavigator.pop()` | শুধু Android, শুধু প্রথম পেজে; বাকি পেজে back আগের মতো |
 | `orientations` | `main()`-এ `SystemChrome.setPreferredOrientations` | dispose হলে reset |
 | `minTextScale` / `maxTextScale` | `MediaQuery` builder দিয়ে text scale clamp | dialog-সহ পুরো অ্যাপে |
@@ -501,6 +503,12 @@ OmniRoute.open('/students/101');
 // উপরেই থাকলে কিছু হয় না; stack-এ আগে থেকে থাকলে সেখানে pop করে ফেরে;
 // না থাকলে push; stack-এ ১০টা (maxDepth) পেজ হয়ে গেলে go (stack নতুন করে)
 OmniRoute.open('/cart', maxDepth: 6);
+OmniRoute.openTo<StudentDetailScreen>(path: {'id': '101'}); // type দিয়ে open (0.3.0)
+
+// ── একসাথে কয়েকটা পেজ বন্ধ (0.3.0) ─────────────────────────
+await OmniRoute.popUntil('/students'); // '/students' উপরে না আসা পর্যন্ত pop; না থাকলে কিছুই না (false)
+await OmniRoute.popToRoot();           // প্রথম পেজে ফেরা (shell-এ বর্তমান tab-এর প্রথম পেজ)
+// দুটোই প্রতি frame-এ একটা করে pop করে, আর Flutter-এর popUntil-এর মতো PopScope মানে না
 
 // ── অন্যান্য ─────────────────────────────────────────────
 OmniRoute.refresh();   // বর্তমান পেজের guard আবার চালাও
@@ -515,7 +523,9 @@ OmniRoute.router;      // আসল GoRouter — বাকি সব কাজ�
 | Login সফল হলে login পেজ সরিয়ে home | `go` বা `replace` |
 | Form থেকে ফলাফল নিয়ে ফেরা | `push<T>` + `pop(result)` |
 | প্রথম পেজে back বাটন (crash এড়াতে) | `maybePop` |
-| একই পেজ দুবার না জমিয়ে খোলা (swipe-back-এর জন্য ভালো) | `open` |
+| একই পেজ দুবার না জমিয়ে খোলা (swipe-back-এর জন্য ভালো) | `open` / `openTo<S>` |
+| Form-এর কয়েক ধাপ পেরিয়ে তালিকায় ফেরা | `popUntil` |
+| সব বন্ধ করে প্রথম পেজে | `popToRoot` |
 
 > একাধিক `OmniApp` একসাথে থাকলে (যেমন desktop-এর কয়েকটা window) `OmniRoute.*` সবশেষে
 > চালু হওয়া অ্যাপে কাজ করে। অন্যটার ভিতর থেকে `context.go(...)` ব্যবহার করুন।
@@ -546,7 +556,8 @@ OmniApp(
 
 - `global: true` → অ্যাপ চালু থাকা পর্যন্ত বাঁচে; সব জায়গা থেকে `context.read<AuthBloc>()`।
 - `lazy: false` → প্রথমেই তৈরি হবে (না দিলে প্রথম ব্যবহারের সময়)।
-- শুধু `Bloc` চলে (Cubit দিলে compile হবে না)।
+- `Bloc` আর `Cubit` দুটোই চলে (0.3.0 থেকে): `OmniBloc<CounterCubit>((_) => CounterCubit())`,
+  `Provide<CounterCubit>()`, `Provide.value(cubit)` — সব জায়গায় একই নিয়ম।
 
 ### ধাপ ২: Screen-এ শুধু type বলুন
 
@@ -749,7 +760,8 @@ class FeedScreen extends OmniStatelessWidget with OmniLifecycle {
   Widget build(BuildContext context) => const FeedList();
 }
 
-// Stateful screen-এ — mixin যায় State-এ
+// Stateful screen-এ — mixin যায় State-এ (widget-এ দিলে hook চলে না;
+// debug build-এ একবার `OmniRouteException(lifecycleOnWidget)` দেখাবে)
 class _PlayerState extends OmniState<PlayerScreen> with OmniLifecycle {
   // উপরে অন্য পেজ এলে, tab বদলালে বা pop হলে
   @override
@@ -929,6 +941,43 @@ OmniPage('/filter', (_) => const FilterScreen(), pageType: OmniPages.custom(
 ));
 ```
 
+### Dialog আর Bottom sheet — route হিসেবে (0.3.0)
+
+দরকার হলে dialog বা sheet-ও একটা URL পায়, আর `push<T>` দিয়ে খুলে ফলাফল ফেরত নেওয়া যায়:
+
+```dart
+OmniPage('/confirm', (_) => const ConfirmScreen(),
+  pageType: OmniPages.dialog(),                 // পিছনের পেজ দেখা যায়; বাইরে tap করলে বন্ধ
+),
+OmniPage('/pick-class', (_) => const PickClassScreen(),
+  pageType: OmniPages.bottomSheet(showDragHandle: true, isScrollControlled: true),
+),
+
+// Screen নিজেই dialog/sheet-এর ভেতরটা বানায়
+class ConfirmScreen extends OmniStatelessWidget {
+  const ConfirmScreen({super.key});
+  @override
+  String get screenName => 'Confirm';
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('মুছে ফেলবেন?'),
+    actions: [
+      TextButton(onPressed: () => OmniRoute.pop(false), child: const Text('না')),
+      FilledButton(onPressed: () => OmniRoute.pop(true), child: const Text('হ্যাঁ')),
+    ],
+  );
+}
+
+// ব্যবহার — pop(true) দিলে true আসে; বাইরে tap বা back করলে null
+final ok = await OmniRoute.push<bool>('/confirm');
+if (ok ?? false) deleteStudent();
+```
+
+| Option | মানে |
+|---|---|
+| `dialog(barrierColor:, barrierDismissible:)` | পিছনের অন্ধকার রঙ (ডিফল্ট `black54`); বাইরে tap করলে বন্ধ হবে কি না (ডিফল্ট হ্যাঁ) |
+| `bottomSheet(showDragHandle:, isScrollControlled:)` | উপরে টানার handle; অর্ধেকের বেশি উঁচু হতে পারবে কি না |
+
 > 💡 **দ্রুত রাখার টিপস:** animation-এ `animation.drive(...)` ব্যবহার করুন
 > (প্রতি frame-এ নতুন object তৈরি হয় না); blur বা `ClipPath`-এর মতো ভারী effect এড়িয়ে চলুন।
 >
@@ -1080,6 +1129,7 @@ Observer লাগলে: `OmniApp(observers:)` (root), `OmniShell(observers:)`,
 | `missingRoute: No OmniPage builds X` | screen-এর route নেই, বা `List<OmniPage>` টাইপ | route যোগ করুন / `List<RouteBase>` |
 | `X is used by several routes` | একই screen কয়েকটা route-এ | path বা `goNamed` দিয়ে navigate |
 | `invalidParameter` | URL-এ ভুল মান | not-found পেজ দেখায় (crash নয়) |
+| `lifecycleOnWidget` | `OmniStatefulWidget`-এ `with OmniLifecycle` (hook চলে না) | mixin-টা `OmniState`-এ দিন |
 | Web-এ refresh করলে 404 | server fallback নেই | ১৫তম অংশ |
 | child route parent-এর Bloc পায় না | nested route আলাদা পেজ | `OmniRouteGroup` |
 | route বদল কাজ করছে না | hot reload | hot restart |
@@ -1627,6 +1677,22 @@ model (`fromJson`/`toJson`), enum আর typed `Endpoint` তৈরি হয়
 
 আরও বিস্তারিত (ইংরেজিতে): [packages/omni_network/README.md](packages/omni_network/README.md),
 [packages/omni_network/doc/advanced.md](packages/omni_network/doc/advanced.md)।
+
+---
+
+## Migration — 0.2 থেকে 0.3
+
+কোনো code বদলানো বাধ্যতামূলক নয়; সব নতুন জিনিস ঐচ্ছিক।
+
+- **`AnyBloc` deprecated** — এখন Cubit-ও চলে, তাই নতুন নাম `OmniAnyBloc` (= `BlocBase<Object?>`)।
+  নিজের generic code-এ `B extends AnyBloc` লিখে থাকলে `B extends OmniAnyBloc` করুন; না করলে শুধু
+  deprecation warning আসবে (1.0.0-তে `AnyBloc` সরানো হবে)।
+- **`onScreenHidden`** এখন screen সরাসরি সরে গেলেও (যেমন `go` পুরো stack বদলালে) একবার ডাকা হয় —
+  প্রতিটা `onScreenVisible`-এর পরে ঠিক একটা hidden। ওই অবস্থায় hook-এর ভিতরে `context.read` করবেন না।
+- **`OmniStatefulWidget`-এ `with OmniLifecycle`** দিলে debug build-এ `lifecycleOnWidget` error দেখাবে
+  (আগে চুপচাপ কিছুই হতো না)। mixin-টা `OmniState`-এ সরান।
+- **ইনস্টল:** pub.dev নয়, GitHub tag (`ref: v0.3.0`) — অধ্যায় ১ দেখুন।
+- 0.2.5-এ আসা `OmniSwipeBackStyle`-এর `flingVelocity`/`springCurve` 0.2.6-এ `flickVelocity`/`settleCurve` হয়েছে।
 
 ---
 

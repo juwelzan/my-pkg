@@ -57,9 +57,11 @@ mixin OmniLifecycle {
 
   /// This screen stopped being the visible one: a page was pushed over it,
   /// another tab was selected, or it is being popped. Each
-  /// [onScreenVisible] is followed by one [onScreenHidden] when the screen
-  /// leaves through navigation. Not called when the whole tree is torn down
-  /// without navigating — use `dispose` for cleanup.
+  /// [onScreenVisible] is followed by exactly one [onScreenHidden], also
+  /// when the screen is removed outright (e.g. `go` replaces the stack or
+  /// the app is torn down). In that last case it runs while the screen is
+  /// being disposed: don't look up inherited widgets (`context.read`) there;
+  /// keep what you need in a field.
   void onScreenHidden(BuildContext context) {}
 
   // ── System changes ───────────────────────────────────────────────────
@@ -106,12 +108,17 @@ class OmniLifecycleHub with WidgetsBindingObserver {
     if (hooks != null) hook(hooks, element);
   }
 
-  /// Call from the element's build: registers the dependencies that change
-  /// visibility and reports a change after the frame.
-  void trackVisibility() {
+  /// Wraps the screen's built child in a tiny widget that tracks
+  /// visibility. Only that widget depends on the route and TickerMode, so a
+  /// push/pop above the screen does not rebuild the screen itself.
+  Widget wrap(Widget child) => _OmniVisibilityProbe(hub: this, child: child);
+
+  /// Registers the dependencies that change visibility on [dependent] and
+  /// reports a change after the frame.
+  void trackVisibility(BuildContext dependent) {
     final visible =
-        (ModalRoute.isCurrentOf(element) ?? true) &&
-        TickerMode.valuesOf(element).enabled;
+        (ModalRoute.isCurrentOf(dependent) ?? true) &&
+        TickerMode.valuesOf(dependent).enabled;
     if (visible == _visible) return;
     _visible = visible;
     _pending.add(this);
@@ -141,8 +148,14 @@ class OmniLifecycleHub with WidgetsBindingObserver {
   // Last state reported to the hooks (null = nothing reported yet).
   bool? _reported;
 
-  /// Stops observing; no hook runs afterwards.
+  /// Stops observing; no hook runs afterwards. A screen that was last
+  /// reported visible gets `onScreenHidden` now, so every visible is paired
+  /// with a hidden even when the screen is removed in one frame.
   void dispose() {
+    if (_reported ?? false) {
+      _reported = false;
+      _call((h, c) => h.onScreenHidden(c));
+    }
     _disposed = true;
     _pending.remove(this);
     WidgetsBinding.instance.removeObserver(this);
@@ -186,4 +199,17 @@ class OmniLifecycleHub with WidgetsBindingObserver {
 
   @override
   void didChangeTextScaleFactor() => _call((h, c) => h.onTextScaleChanged(c));
+}
+
+class _OmniVisibilityProbe extends StatelessWidget {
+  const _OmniVisibilityProbe({required this.hub, required this.child});
+
+  final OmniLifecycleHub hub;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    hub.trackVisibility(context);
+    return child;
+  }
 }

@@ -111,6 +111,13 @@ class ExampleApp extends StatelessWidget {
     ],
     routes: [
       OmniPage('/login', (_) => const LoginScreen()),
+      // A dialog route: `await OmniRoute.push<bool>('/confirm-logout')`
+      // returns what the dialog passes to `OmniRoute.pop(...)`.
+      OmniPage(
+        '/confirm-logout',
+        (_) => const ConfirmLogoutScreen(),
+        pageType: OmniPages.dialog(),
+      ),
       OmniStatefulShell(
         builder: (context, state, shell) => HomeShell(shell: shell),
         branches: [
@@ -345,6 +352,11 @@ class _StudentEditState extends OmniState<StudentEditScreen> {
             },
             child: const Text('Save'),
           ),
+          // Pops edit and detail in one go, back to the list.
+          TextButton(
+            onPressed: () => OmniRoute.popUntil('/students'),
+            child: const Text('Back to list'),
+          ),
         ],
       ),
     ),
@@ -387,7 +399,11 @@ class SettingsScreen extends OmniStatelessWidget {
         ),
         ListTile(
           title: const Text('Log out'),
-          onTap: () => context.read<AuthBloc>().add(LoggedOut()),
+          onTap: () async {
+            final auth = context.read<AuthBloc>();
+            final ok = await OmniRoute.push<bool>('/confirm-logout');
+            if (ok ?? false) auth.add(LoggedOut());
+          },
         ),
       ],
     ),
@@ -402,5 +418,25 @@ class ProfileScreen extends OmniStatelessWidget {
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: Text(screenName)),
     body: const Center(child: Text('Profile')),
+  );
+}
+
+class ConfirmLogoutScreen extends OmniStatelessWidget {
+  const ConfirmLogoutScreen({super.key});
+  @override
+  String get screenName => 'Confirm log out';
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('Log out?'),
+    actions: [
+      TextButton(
+        onPressed: () => OmniRoute.pop(false),
+        child: const Text('Cancel'),
+      ),
+      FilledButton(
+        onPressed: () => OmniRoute.pop(true),
+        child: const Text('Yes, log out'),
+      ),
+    ],
   );
 }

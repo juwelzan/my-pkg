@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
@@ -104,8 +105,15 @@ class _OmniInitGateState extends State<OmniInitGate> {
 }
 
 /// Closes the keyboard when the user taps outside a text field.
+///
+/// Uses the text field's own tap-outside detection (`TapRegion`): every
+/// `EditableText` invokes [EditableTextTapOutsideIntent] /
+/// [EditableTextTapUpOutsideIntent], and this widget handles them for the
+/// whole app. Nothing joins the gesture arena, taps on the field's toolbar
+/// and handles count as inside, and a pointer that moved further than a tap
+/// (a scroll or drag) leaves the keyboard open.
 @internal
-class OmniKeyboardDismiss extends StatelessWidget {
+class OmniKeyboardDismiss extends StatefulWidget {
   /// Wraps [child].
   const OmniKeyboardDismiss({super.key, required this.child});
 
@@ -113,13 +121,38 @@ class OmniKeyboardDismiss extends StatelessWidget {
   final Widget child;
 
   @override
-  Widget build(BuildContext context) => GestureDetector(
-    // Translucent: taps still reach the widgets below. A text field's own
-    // tap wins the gesture arena, so tapping a field keeps it focused.
-    behavior: HitTestBehavior.translucent,
-    onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
-    child: child,
-  );
+  State<OmniKeyboardDismiss> createState() => _OmniKeyboardDismissState();
+}
+
+class _OmniKeyboardDismissState extends State<OmniKeyboardDismiss> {
+  // Where each pointer went down outside a focused field.
+  final Map<int, Offset> _downs = {};
+
+  late final Map<Type, Action<Intent>> _actions = {
+    EditableTextTapOutsideIntent: CallbackAction<EditableTextTapOutsideIntent>(
+      onInvoke: (i) {
+        final e = i.pointerDownEvent;
+        _downs[e.pointer] = e.position;
+        return null;
+      },
+    ),
+    EditableTextTapUpOutsideIntent:
+        CallbackAction<EditableTextTapUpOutsideIntent>(
+          onInvoke: (i) {
+            final e = i.pointerUpEvent;
+            final down = _downs.remove(e.pointer);
+            if (down != null &&
+                (e.position - down).distance <= computeHitSlop(e.kind, null)) {
+              i.focusNode.unfocus();
+            }
+            return null;
+          },
+        ),
+  };
+
+  @override
+  Widget build(BuildContext context) =>
+      Actions(actions: _actions, child: widget.child);
 }
 
 /// "Press back again to exit" on the first page (Android only).
