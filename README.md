@@ -930,51 +930,62 @@ OmniPage('/filter', (_) => const FilterScreen(), pageType: OmniPages.custom(
 > ⚠️ **Android predictive back animation** শুধু `material`-এ থাকে। custom animation-এ back বাটন
 > আর system back ঠিকই কাজ করে। custom animation-এ swipe-back চাইলে নিচের **Swipe back** দেখুন।
 
-### Swipe back — কিনারা থেকে টেনে পেজ বন্ধ (0.2.5)
+### Swipe back — কিনারা থেকে টেনে পেজ বন্ধ (0.2.5, ৮টা style 0.2.6)
 
 <!-- GIF: docs/swipe_back_zoom.gif (push → অর্ধেক টেনে ছেড়ে দেওয়া → পুরো টেনে zoom-out pop) -->
 ![Swipe back zoom](docs/swipe_back_zoom.gif)
 
 আগে custom animation (`fade`, `slide`, `custom`…) দিলে swipe-back থাকত না। এখন যেকোনো animated
 পেজে swipe-back আলাদা layer হিসেবে যোগ করা যায়। এটা ডিফল্টে **বন্ধ**, তাই পুরনো অ্যাপ আগের মতোই চলে।
+নিচে `p` মানে কতটা টানা হয়েছে (০ = ছোঁয়া হয়নি, ১ = পুরো বন্ধ)।
 
 | Style | কী হয় |
 |---|---|
-| `OmniSwipeBack.none` | gesture নেই (ডিফল্ট) |
-| `OmniSwipeBack.slide` | পেজ আঙুলের সাথে পাশে সরে (iOS-এর মতো) |
-| `OmniSwipeBack.zoom` | পেজ ছোট হয় (১ → ০.৮২), আঙুলের সাথে কিছুটা সরে, কোনা গোল হয়, শেষ ২৫%-এ মিলিয়ে যায় |
+| `none` | gesture নেই (ডিফল্ট) |
+| `slide` | iOS-এর মতো: পেজ আঙুলের সাথে ১:১ সরে, কিনারায় হালকা ছায়া; নিচের পেজ -৩০% থেকে ভেসে আসে |
+| `zoom` | ১ → ০.৮২ ছোট হয়, আঙুলের ৪৫% সরে, কোনা গোল (সর্বোচ্চ ২৮), p > ০.৭৫ হলে মিলিয়ে যায়; নিচের পেজ বদলায় না |
+| `zoomCenter` | জায়গায় দাঁড়িয়ে মাঝখানে ০.৭৫ পর্যন্ত ছোট হয়, p = ০.৫ থেকে মিলিয়ে যায় — পেজ যেন স্ক্রিনের ভেতরে পড়ে যায় |
+| `zoomToEdge` | যেদিকে টানছেন সেই কিনারার দিকে ০.৭ পর্যন্ত ছোট হয়, ২৫% সরে — যেন পাশে ঠেলে বের করা |
+| `zoomFollow` | আঙুল যেখানে, সেখানকে কেন্দ্র করে ০.৮ পর্যন্ত ছোট হয়, আঙুলের ৬০% সরে — যেন একটা card হাতে ধরা |
+| `zoomCard` | `zoom`-এর মতো (০.৮৫) + চারপাশে নরম ছায়া; নিচের পেজ প্রথমে একটু অন্ধকার, খোলার সাথে উজ্জ্বল হয় |
+| `zoomParallax` | দুটো পেজই zoom: উপরেরটা `zoom`, নিচেরটা ০.৯৪ → ১ বড় হয় (পিছনে background রঙ, কালো কিনারা নেই) |
+| `zoomTilt` | `zoom` + দরজার মতো হালকা 3D ঘোরা (`maxTilt`, ডিফল্ট ০.২৫ rad) |
 
 ```dart
-// ১) পুরো অ্যাপে: সব animated পেজে (fade, slide, transition(...), custom(...)) zoom swipe-back
+// ১) পুরো অ্যাপে: সব animated পেজে (fade, slide, transition(...), custom(...))
 OmniApp(
   pageType: OmniPages.fade,
-  swipeBack: OmniSwipeBack.zoom,
+  swipeBack: OmniSwipeBack.zoomCard,
+  swipeBackStyle: const OmniSwipeBackStyle(minScale: 0.85, maxRadius: 24),
   ...
 )
 
 // ২) শুধু একটা page type-এ (অ্যাপের ডিফল্ট বন্ধ থাকলেও কাজ করে)
-OmniPage('/student/:id', (p) => StudentScreen(id: p.pathInt('id')),
-  pageType: OmniPages.transition(OmniTransition.fade, swipeBack: OmniSwipeBack.zoom),
-);
-OmniPages.custom(myBuilder, swipeBack: OmniSwipeBack.slide);
+OmniPages.transition(OmniTransition.fade, swipeBack: OmniSwipeBack.zoomTilt);
+OmniPages.custom(myBuilder, swipeBack: OmniSwipeBack.zoomFollow);
 
 // ৩) কোনো পেজে বন্ধ রাখা (অ্যাপের ডিফল্ট চালু থাকলেও)
 OmniPages.transition(OmniTransition.slideUp, swipeBack: OmniSwipeBack.none);
 
-// ৪) নিজের মতো সংখ্যা
-OmniApp(
-  swipeBack: OmniSwipeBack.zoom,
-  swipeBackStyle: const OmniSwipeBackStyle(
-    minScale: 0.88,        // পুরো টানলে কত ছোট হবে
-    maxRadius: 20,         // কোনার সর্বোচ্চ গোলভাব (px)
-    slideFactor: 0.45,     // আঙুলের দূরত্বের কত অংশ পেজ সরবে
-    edgeWidth: 28,         // কিনারার কতটা জায়গা থেকে শুরু করা যাবে (safe area বড় হলে সেটা)
-    closeThreshold: 0.5,   // অর্ধেকের বেশি টানলে বন্ধ
-    flingVelocity: 1.0,    // দ্রুত টানলে (screen-width/second) কম টানলেও বন্ধ
-    edges: {OmniSwipeEdge.left}, // শুধু বাম কিনারা
-  ),
-  ...
-)
+// ৪) নিজের মতো সংখ্যা — null রাখলে প্রতিটা style-এর নিজের ডিফল্ট
+const OmniSwipeBackStyle(
+  minScale: 0.88,        // পুরো টানলে কত ছোট হবে
+  maxRadius: 20,         // কোনার সর্বোচ্চ গোলভাব (px)
+  slideFactor: 0.45,     // আঙুলের দূরত্বের কত অংশ পেজ সরবে
+  fadeStart: 0.75,       // কতটা টানার পর মিলিয়ে যেতে শুরু করবে
+  maxTilt: 0.2,          // zoomTilt-এ সর্বোচ্চ ঘোরা (radian) — ছোট রাখুন
+  shadow: true,          // চলমান পেজের চারপাশে ছায়া
+  dimBelow: true,        // নিচের পেজ অন্ধকার থেকে উজ্জ্বল
+  backgroundColor: Colors.black, // zoomParallax-এ নিচের পেজের পিছনে
+  edgeWidth: 28,         // কিনারার কতটা জায়গা থেকে শুরু (safe area বড় হলে সেটা)
+  edges: {OmniSwipeEdge.left},   // শুধু বাম কিনারা
+  closeThreshold: 0.5,   // অর্ধেকের বেশি টানলে বন্ধ
+  flickVelocity: 1.0,    // দ্রুত টানলে (screen-width/second) কম টানলেও বন্ধ
+);
+
+// ৫) তৈরি preset
+OmniSwipeBackStyle.subtle();   // কম zoom, tilt নেই
+OmniSwipeBackStyle.dramatic(); // বেশি zoom, ছায়া, dim
 ```
 
 **কীভাবে কাজ করে**
@@ -983,8 +994,12 @@ OmniApp(
 - কিনারার জায়গায় tap করলে নিচের বাটন ঠিকই tap পায়।
 - প্রথম পেজে, `PopScope(canPop: false)`-এ, `fullscreenDialog`-এ, অন্য animation চলার সময় gesture চলে না।
 - বন্ধ হয় go_router দিয়ে, তাই `OmniRoute.stack`, log আর `onScreenHidden/onScreenVisible` ঠিক থাকে।
-- system-এ "animation কমাও" চালু থাকলে gesture থাকে, কিন্তু zoom-এর বদলে সাধারণ slide।
-- শুধু `Transform`, `Opacity` আর (কোনা গোল হলে) `ClipRRect` — GPU-তে হালকা।
+- system-এ "animation কমাও" চালু থাকলে gesture থাকে, কিন্তু যেকোনো style-এর বদলে সাধারণ slide।
+- শুধু `Transform`, `Opacity`, `ClipRRect` আর ছায়া — blur বা `BackdropFilter` নেই, GPU-তে হালকা।
+- না টানা অবস্থায় পেজের চারপাশে কোনো বাড়তি widget থাকে না (শুধু কিনারার listener)।
+- নিচের পেজের effect (`slide`-এর parallax, `zoomParallax`) তখনই হয় যখন নিচের পেজটাও
+  animated page type-এর (`OmniPages.fade` ইত্যাদি); `material`/`cupertino` পেজ নিচে থাকলে সেটা স্থির থাকে।
+- example অ্যাপের Settings-এ সব ৮টা style বদলে চালিয়ে দেখা যায়।
 
 > 💡 swipe-back-এর জন্য পিছনে একটা পেজ থাকা দরকার। সব জায়গায় `OmniRoute.open(...)` দিয়ে খুললে
 > পিছনে পেজ থাকে, অথচ একই পেজ দুবার জমে না (অধ্যায় ৮ দেখুন)।

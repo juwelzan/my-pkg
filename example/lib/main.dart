@@ -3,6 +3,9 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omni_route/omni_route.dart';
 
+/// Swipe-back mode, changed live from Settings.
+final swipeMode = ValueNotifier(OmniSwipeBack.zoom);
+
 void main() {
   OmniRoute.usePathUrls();
   runApp(const ExampleApp());
@@ -77,7 +80,12 @@ class ExampleApp extends StatelessWidget {
   const ExampleApp({super.key});
 
   @override
-  Widget build(BuildContext context) => OmniApp(
+  Widget build(BuildContext context) => ValueListenableBuilder(
+    valueListenable: swipeMode,
+    builder: (context, mode, _) => _app(mode),
+  );
+
+  Widget _app(OmniSwipeBack mode) => OmniApp(
     initialRoute: '/dashboard',
     guards: const [AuthGuard()],
     logNavigation: true, // debug builds print each navigation
@@ -89,11 +97,10 @@ class ExampleApp extends StatelessWidget {
       context,
     )?.showSnackBar(const SnackBar(content: Text('Press back again to exit'))),
     restorationScopeId: 'router', // restore the route stack after restart
-    // Fade between pages; swipe from either edge to close with a zoom-out.
-    pageType: OmniPages.transition(
-      OmniTransition.fade,
-      swipeBack: OmniSwipeBack.zoom,
-    ),
+    // Fade between pages; swipe from either edge to close. The swipe style
+    // is app-wide and can be switched live in Settings.
+    pageType: OmniPages.fade,
+    swipeBack: mode,
     blocs: [
       // Global Blocs: created once, live for the whole app.
       OmniBloc<AuthBloc>((_) => AuthBloc(), global: true, lazy: false),
@@ -356,6 +363,20 @@ class SettingsScreen extends OmniStatelessWidget {
         ListTile(
           title: const Text('Profile'),
           onTap: () => OmniRoute.go('/settings/profile'),
+        ),
+        ValueListenableBuilder(
+          valueListenable: swipeMode,
+          builder: (context, mode, _) => ListTile(
+            title: const Text('Swipe back'),
+            trailing: DropdownButton<OmniSwipeBack>(
+              value: mode,
+              onChanged: (m) => swipeMode.value = m!,
+              items: [
+                for (final m in OmniSwipeBack.values)
+                  DropdownMenuItem(value: m, child: Text(m.name)),
+              ],
+            ),
+          ),
         ),
         BlocBuilder<ThemeBloc, bool>(
           builder: (context, dark) => SwitchListTile(

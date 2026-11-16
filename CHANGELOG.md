@@ -1,3 +1,23 @@
+## 0.2.6
+
+Swipe-back gets 8 visual styles. Additive except for two renames in
+`OmniSwipeBackStyle`, which was only added in 0.2.5.
+
+- New `OmniSwipeBack` styles: `zoomCenter`, `zoomToEdge`, `zoomFollow`,
+  `zoomCard`, `zoomParallax`, `zoomTilt` (plus `slide` and `zoom`). `slide`
+  now has a light edge shadow and a -30% parallax on the page below.
+- New `OmniSwipeBackStyle` options: `fadeStart`, `maxTilt`, `shadow`,
+  `dimBelow`, `backgroundColor`; visual values are now nullable and fall back
+  to per-style defaults. Presets `OmniSwipeBackStyle.subtle()` and
+  `.dramatic()`.
+- Renamed `flingVelocity` → `flickVelocity` and `springCurve` →
+  `settleCurve`.
+- A page that is not being swiped has no extra widgets (only the edge
+  listener); its state is kept when the swipe starts and ends. Only
+  Transform / Opacity / ClipRRect / box shadow are used, never blur.
+- The page follows the finger from touch-down (no slop jump).
+- Golden tests for every style; the example app can switch styles live.
+
 ## 0.2.5
 
 No API changes; purely additive. Swipe-back is off by default, so existing
