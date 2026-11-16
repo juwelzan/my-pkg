@@ -13,6 +13,12 @@ No API changes; purely additive. Everything new is off by default.
   new `OmniPages.swipeZoom` so they follow the gesture too (iOS unchanged).
 - New `OmniPages.swipeZoom`: soft zoom-in (0.94 → 1) with a fade, plus the
   `zoom` edge swipe.
+- OmniRoute's logs (`logNavigation`, guard warnings) now go through the
+  `logger` package (new dependency `logger: ^2.8.0`) in one readable format:
+  a framed block per event with time, time since start, level emoji and
+  aligned `from`/`to` rows with the screen class. Debug builds only.
+  Replace `OmniRoute.logger` to change the format or the destination. The
+  old one-line `[OmniRoute] ...` text is gone.
 - The edge swipe and the system gesture share one settle path; only the
   page on top of everything (go_router's top page, in a visible tab) takes
   the system gesture.

@@ -1,9 +1,11 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:go_router/go_router.dart';
+import 'package:logger/logger.dart';
 import 'package:meta/meta.dart';
 
 import '../errors/omni_route_exception.dart';
+import 'omni_log.dart';
 import 'omni_route_entry.dart';
 import '../routing/omni_route_registry.dart';
 import '../screens/omni_screen.dart';
@@ -33,6 +35,16 @@ abstract final class OmniRoute {
   /// ```
   /// Your server must return `index.html` for unknown paths (see README).
   static void usePathUrls() => usePathUrlStrategy();
+
+  /// Where OmniRoute's own logs go (`OmniApp(logNavigation: true)`, guard
+  /// warnings), via the `logger` package. Debug builds only by default,
+  /// one framed block per event with time and level emoji. Replace it to
+  /// change the format or send logs elsewhere:
+  ///
+  /// ```dart
+  /// OmniRoute.logger = Logger(printer: SimplePrinter());
+  /// ```
+  static Logger logger = defaultOmniLogger();
 
   /// The app's GoRouter, for anything these helpers don't cover.
   static GoRouter get router =>

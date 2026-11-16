@@ -1137,10 +1137,43 @@ OmniApp(
     // nav.from → আগের পেজ, nav.to → নতুন পেজ, nav.uri → পুরো URL
     analytics.logScreenView(nav.to.screen.toString(), nav.uri.toString());
   },
-  // debug build-এ console-এ: [OmniRoute] / → /students/7 (StudentDetailScreen)
+  // debug build-এ console-এ সুন্দর করে সাজানো log (নিচে দেখুন)
   logNavigation: true,
   ...
 )
+```
+
+### Log দেখতে কেমন (`logger` package, 0.3.1)
+
+OmniRoute-এর নিজের সব log ([`logger`](https://pub.dev/packages/logger) package দিয়ে) একই ধাঁচে আসে —
+প্রতিটা ঘটনা একটা বাক্সে, উপরে সময় আর অ্যাপ চালুর পর কতক্ষণ, বাঁয়ে level-এর emoji
+(💡 তথ্য, ⚠️ সতর্কতা, ⛔ error), আর `from`/`to` এক লাইনে মিলিয়ে সাজানো:
+
+```text
+┌────────────────────────────────────────────────────────────────────────
+│ 10:42:07.311 (+0:00:05.402070)
+├┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+│ 💡 OmniRoute · navigation
+│ 💡 from  /students             StudentListScreen
+│ 💡 to    /students/7           StudentDetailScreen
+│ 💡 uri   /students/7?tab=info
+└────────────────────────────────────────────────────────────────────────
+```
+
+- `from` — আগের পেজ (প্রথমবার `(app start)`), `to` — নতুন পেজ, শেষে screen-এর class।
+- `uri` লাইন শুধু query (`?tab=...`) থাকলে আসে।
+- guard নিজের পেজেই redirect করলে ⚠️ `OmniRoute · guard` সতর্কতা আসে।
+- শুধু debug build-এ; release build-এ কিছুই print হয় না।
+
+নিজের মতো format বা অন্য জায়গায় (file, crash reporter) পাঠাতে `OmniRoute.logger` বদলে দিন:
+
+```dart
+import 'package:logger/logger.dart';
+
+OmniRoute.logger = Logger(
+  printer: SimplePrinter(),   // এক লাইনের ছোট log
+  // output: MyFileOutput(),  // নিজের LogOutput
+);
 ```
 
 Observer লাগলে: `OmniApp(observers:)` (root), `OmniShell(observers:)`,
@@ -1443,19 +1476,42 @@ auth: OmniAuth(
 final api = OmniNetwork(baseUrl: url, enableLogging: true); // client তৈরির সময় ঠিক হয়
 ```
 
-```
-┌────────────────────────────────────────────────────────────
-│ GET  https://api.example.com/v1/users/10
-├────────────────────────────────────────────────────────────
-│ ✔ 200 OK · 142 ms · 1.2 KB
-│ { "id": 10, "name": "Ana", "access_token": "***" }
-└────────────────────────────────────────────────────────────
+[`logger`](https://pub.dev/packages/logger) package দিয়ে, OmniRoute-এর log-এর মতো একই ধাঁচে —
+প্রতিটা call একটা বাক্সে: উপরে সময়, তারপর method + URL, পাঠানো body, ফলাফল (status · সময় · size) আর
+সুন্দর করে সাজানো JSON:
+
+```text
+┌───────────────────────────────────────────────────────────
+│ 15:35:30.519 (+0:00:00.022214)
+├┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+│ 💡 GET  https://api.example.com/v1/users/10
+│ 💡 ✔ 200 OK · 3 ms · 43 B
+│ 💡 {
+│ 💡   "id": 10,
+│ 💡   "name": "Rahim",
+│ 💡   "access_token": "***"
+│ 💡 }
+└───────────────────────────────────────────────────────────
+┌───────────────────────────────────────────────────────────
+│ 15:35:30.526 (+0:00:00.028918)
+├┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+│ ⚠️ POST https://api.example.com/v1/orders
+│ ⚠️ ⇢ body  {"qty":0}
+│ ⚠️ ✖ 422 Unprocessable Entity · 0 ms · 15 B
+│ ⚠️ {
+│ ⚠️   "error": "qty"
+│ ⚠️ }
+└───────────────────────────────────────────────────────────
 ```
 
+- বাঁয়ের emoji দেখেই বোঝা যায়: 💡 সফল, ⚠️ 4xx (আপনার request-এ ভুল), ⛔ 5xx বা response নেই
+  (timeout, internet নেই)
 - password, token, cookie, API key সবসময় `***` — কখনো log-এ আসে না
-- সবুজ = সফল, হলুদ = 4xx, লাল = 5xx / response নেই; retry, token refresh, cache hit চিহ্নিত
+- retry (`↻ retry 2/3`), token refresh (`🔑 token refreshed`), cache hit চিহ্নিত
 - release build-এ নিজে থেকেই বন্ধ; log বন্ধ থাকলে network-এর আচরণ একটুও বদলায় না
 - বেশি বিস্তারিত: `logOptions: const LogOptions(headers: true)`
+- নিজের `Logger` (অন্য format, file, crash reporter):
+  `logSink: PrettyLogSink(logger: Logger(...))` (`advanced.dart`)
 
 ### ২১.৯ Retry আর Cache
 

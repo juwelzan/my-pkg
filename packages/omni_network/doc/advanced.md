@@ -84,28 +84,44 @@ final api = OmniNetwork(baseUrl: url, enableLogging: true);
 ```
 
 ```
-┌────────────────────────────────────────────────────────────
-│ GET  https://api.example.com/v1/users/10
-│ 🔑 token refreshed
-├────────────────────────────────────────────────────────────
-│ ✔ 200 OK · 142 ms · 1.2 KB
-│ {
-│   "id": 10,
-│   "name": "Ana",
-│   "access_token": "***"
-│ }
-└────────────────────────────────────────────────────────────
-
-┌────────────────────────────────────────────────────────────
-│ POST https://api.example.com/v1/orders
-│ ⇢ body  {"item":7,"password":"***"}
-├────────────────────────────────────────────────────────────
-│ ✖ 422 Unprocessable Entity · 88 ms · 29 B
-│ {
-│   "error": "qty must be ≤ 1"
-│ }
-└────────────────────────────────────────────────────────────
+┌───────────────────────────────────────────────────────────
+│ 15:35:30.519 (+0:00:00.022214)
+├┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+│ 💡 GET  https://api.example.com/v1/users/10
+│ 💡 🔑 token refreshed
+│ 💡 ✔ 200 OK · 142 ms · 1.2 KB
+│ 💡 {
+│ 💡   "id": 10,
+│ 💡   "name": "Ana",
+│ 💡   "access_token": "***"
+│ 💡 }
+└───────────────────────────────────────────────────────────
+┌───────────────────────────────────────────────────────────
+│ 15:35:30.611 (+0:00:00.114580)
+├┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+│ ⚠️ POST https://api.example.com/v1/orders
+│ ⚠️ ⇢ body  {"item":7,"password":"***"}
+│ ⚠️ ✖ 422 Unprocessable Entity · 88 ms · 29 B
+│ ⚠️ {
+│ ⚠️   "error": "qty must be ≤ 1"
+│ ⚠️ }
+└───────────────────────────────────────────────────────────
 ```
+
+Blocks are written with the [`logger`](https://pub.dev/packages/logger)
+package, in the same format as OmniRoute's own logs. To use your own
+`Logger` (another printer, a file, a crash reporter):
+
+```dart
+OmniNetwork(
+  baseUrl: url,
+  enableLogging: true,
+  logSink: PrettyLogSink(logger: Logger(printer: SimplePrinter())),
+);
+```
+
+`PrettyLogSink(printer: print)` instead prints the classic text block
+(drawn by OmniNetwork itself, one `print` per call).
 
 What each block shows:
 
@@ -114,8 +130,9 @@ What each block shows:
   concurrent calls never mix.
 - **Retries and token refresh.** `↻ retry 2/3` and `🔑 token refreshed`
   lines; cache hits are marked `· cache`.
-- **Colours.** Green for 2xx, yellow for 4xx, red for 5xx and failures, when
-  the terminal supports colours.
+- **Levels.** 💡 info for 2xx/3xx, ⚠️ warning for 4xx, ⛔ error for 5xx and
+  failures (timeouts, no connection), coloured when the terminal supports
+  it.
 - **Secrets.** Always `***`: auth and cookie headers, token, password and
   API-key fields, query values and URL user info. This cannot be turned off,
   only extended with `redactor: Redactor(extraKeys: {...})` from

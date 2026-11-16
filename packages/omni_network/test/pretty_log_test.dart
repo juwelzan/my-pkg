@@ -277,7 +277,7 @@ void main() {
     });
 
     test(
-      'enableLogging: true uses the pretty printer by default (print)',
+      'enableLogging: true logs through the logger package by default',
       () async {
         final printed = <String>[];
         await runZoned(
@@ -295,8 +295,19 @@ void main() {
             print: (_, _, _, line) => printed.add(line),
           ),
         );
-        expect(printed.single, startsWith('┌'));
-        expect(printed.single, contains('GET  https://api.test/v1/users/1'));
+        // One logger block: frame, time, then one line per row, each with
+        // the level emoji. Printed synchronously, so blocks never
+        // interleave.
+        final block = printed.join('\n');
+        expect(printed.first, startsWith('┌'));
+        expect(printed.last, startsWith('└'));
+        expect(block, contains('💡 GET  https://api.test/v1/users/1'));
+        expect(block, contains('💡 ✔ 200 OK'));
+        expect(
+          block,
+          contains(RegExp(r'\d\d:\d\d:\d\d\.\d{3}')),
+          reason: 'time',
+        );
       },
     );
   });

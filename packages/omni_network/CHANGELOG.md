@@ -1,3 +1,14 @@
+## Unreleased
+
+- `enableLogging: true` now logs through the `logger` package (new
+  dependency `logger: ^2.8.0`), in the same format as OmniRoute's logs: a
+  framed block per call with time and time since start, and a level emoji
+  per line — 💡 success, ⚠️ 4xx, ⛔ 5xx or no response. Content is
+  unchanged (method, URL, notes, status, time, size, pretty JSON) and still
+  redacted.
+- New `PrettyLogSink(logger:)` to send the blocks to your own `Logger`.
+  `PrettyLogSink(printer:)` keeps the classic self-framed text block.
+
 ## 0.1.0
 
 First tagged release (`omni_network-v0.1.0`); no API changes from 0.1.0-dev.

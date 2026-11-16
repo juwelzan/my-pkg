@@ -170,30 +170,44 @@ Keystore.
 
 ## Terminal logs
 
-`enableLogging: true` prints each call as one clear block. Secrets are
-always hidden:
+`enableLogging: true` logs each call as one clear block through the
+[`logger`](https://pub.dev/packages/logger) package (same look as
+OmniRoute's logs). Secrets are always hidden:
 
 ```
-┌────────────────────────────────────────────────────────────
-│ GET  https://api.example.com/v1/users/10
-├────────────────────────────────────────────────────────────
-│ ✔ 200 OK · 142 ms · 1.2 KB
-│ {
-│   "id": 10,
-│   "name": "Ana",
-│   "access_token": "***"
-│ }
-└────────────────────────────────────────────────────────────
+┌───────────────────────────────────────────────────────────
+│ 15:35:30.519 (+0:00:00.022214)
+├┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+│ 💡 GET  https://api.example.com/v1/users/10
+│ 💡 ✔ 200 OK · 3 ms · 43 B
+│ 💡 {
+│ 💡   "id": 10,
+│ 💡   "name": "Rahim",
+│ 💡   "access_token": "***"
+│ 💡 }
+└───────────────────────────────────────────────────────────
+┌───────────────────────────────────────────────────────────
+│ 15:35:30.526 (+0:00:00.028918)
+├┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+│ ⚠️ POST https://api.example.com/v1/orders
+│ ⚠️ ⇢ body  {"qty":0}
+│ ⚠️ ✖ 422 Unprocessable Entity · 0 ms · 15 B
+│ ⚠️ {
+│ ⚠️   "error": "qty"
+│ ⚠️ }
+└───────────────────────────────────────────────────────────
 ```
 
-- **Colours.** Green means success, yellow a 4xx error, red a 5xx error or
-  no response.
+- **Levels.** 💡 success, ⚠️ a 4xx error, ⛔ a 5xx error or no response
+  (with matching colours in terminals that support them).
 - **Notes.** Retries (`↻ retry 2/3`), token refreshes (`🔑 token
   refreshed`) and cache hits are marked.
 - **Off in release builds.** Logging is turned off automatically in release
   builds. `false` turns it off everywhere.
 - **More detail.** Use `logOptions: const LogOptions(headers: true)` to also
   print headers; see the [full guide](doc/advanced.md#logging-and-redaction).
+- **Your own logger.** `logSink: PrettyLogSink(logger: Logger(...))` (from
+  `advanced.dart`) sends the same blocks to your `Logger`.
 
 ---
 

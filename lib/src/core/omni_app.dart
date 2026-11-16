@@ -13,6 +13,7 @@ import '../routing/omni_swipe_back.dart';
 import '../screens/omni_lifecycle.dart';
 import 'omni_app_features.dart';
 import 'omni_desktop_back.dart';
+import 'omni_log.dart';
 import 'omni_route_entry.dart';
 import 'omni_route.dart';
 
@@ -287,7 +288,9 @@ class _OmniAppState extends State<OmniApp> {
     _last = to;
     _lastUri = state.uri;
     _lastPageKey = state.pageKey;
-    if (widget.logNavigation && kDebugMode) debugPrint('[OmniRoute] $event');
+    if (widget.logNavigation && kDebugMode) {
+      OmniRoute.logger.i(navigationMessage(event));
+    }
     widget.onNavigate?.call(event);
   }
 

@@ -1,6 +1,7 @@
 // Audit v2 finding F: metadata, current/stack, navigation hooks, logging.
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:logger/logger.dart';
 import 'package:omni_route/omni_route.dart';
 
 class S extends OmniStatelessWidget {
@@ -138,18 +139,32 @@ void main() {
     t,
   ) async {
     final printed = <String>[];
-    final old = debugPrint;
-    debugPrint = (m, {wrapWidth}) => printed.add(m ?? '');
+    final old = OmniRoute.logger;
+    OmniRoute.logger = Logger(
+      printer: SimplePrinter(colors: false),
+      output: _ListOutput(printed),
+    );
     final events = <OmniNavigation>[];
     await t.pumpWidget(app(events, log: true));
     await t.pumpAndSettle();
     OmniRoute.go('/items/3');
     await t.pumpAndSettle();
-    debugPrint = old;
-    expect(printed.where((m) => m.startsWith('[OmniRoute]')).length, 2);
-    expect(printed.last, contains('/items/3 (Detail)'));
+    OmniRoute.logger = old;
+    expect(
+      printed.where((m) => m.contains('OmniRoute · navigation')).length,
+      2,
+    );
+    expect(printed.last, contains('/items/3'));
+    expect(printed.last, contains('Detail'));
 
     // Disposing removes the delegate listener (checked by the leak tracker).
     await t.pumpWidget(const SizedBox());
   });
+}
+
+class _ListOutput extends LogOutput {
+  _ListOutput(this.lines);
+  final List<String> lines;
+  @override
+  void output(OutputEvent event) => lines.add(event.lines.join('\n'));
 }

@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
+import '../core/omni_route.dart';
+
 /// Redirect logic built on GoRouter's native `redirect`.
 ///
 /// Return a location to redirect, or `null` to allow. Keep it cheap: read
@@ -89,7 +91,10 @@ String? _accept(String? to, GoRouterState state) {
   if (to == null) return null;
   if (_same(to, state.uri)) {
     assert(() {
-      debugPrint('OmniRoute: guard redirected $to to itself; ignored.');
+      OmniRoute.logger.w(
+        'OmniRoute · guard\n'
+        'redirected to "$to", the page being opened; ignored.',
+      );
       return true;
     }());
     return null;
