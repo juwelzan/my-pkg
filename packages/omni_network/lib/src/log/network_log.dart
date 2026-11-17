@@ -49,7 +49,7 @@ final class NetworkLogRecord {
   /// Redacted headers.
   final Map<String, String> headers;
 
-  /// Redacted, truncated body, or `null`.
+  /// Redacted body (whole, unless a custom sink cut it), or `null`.
   final String? body;
 
   /// Status code ([NetworkLogKind.response] only).

@@ -177,7 +177,7 @@ OmniRoute's logs). Secrets are always hidden:
 
 ```
 ┌───────────────────────────────────────────────────────────
-│ 15:35:30.519 (+0:00:00.022214)
+│ 2026-11-17 15:35:30.519
 ├┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 │ 💡 GET  https://api.example.com/v1/users/10
 │ 💡 ✔ 200 OK · 3 ms · 43 B
@@ -188,10 +188,13 @@ OmniRoute's logs). Secrets are always hidden:
 │ 💡 }
 └───────────────────────────────────────────────────────────
 ┌───────────────────────────────────────────────────────────
-│ 15:35:30.526 (+0:00:00.028918)
+│ 2026-11-17 15:35:30.526
 ├┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 │ ⚠️ POST https://api.example.com/v1/orders
-│ ⚠️ ⇢ body  {"qty":0}
+│ ⚠️ ⇢ body
+│ ⚠️   {
+│ ⚠️     "qty": 0
+│ ⚠️   }
 │ ⚠️ ✖ 422 Unprocessable Entity · 0 ms · 15 B
 │ ⚠️ {
 │ ⚠️   "error": "qty"
@@ -199,8 +202,16 @@ OmniRoute's logs). Secrets are always hidden:
 └───────────────────────────────────────────────────────────
 ```
 
-- **Levels.** 💡 success, ⚠️ a 4xx error, ⛔ a 5xx error or no response
-  (with matching colours in terminals that support them).
+- **Levels.** 💡 success, ⚠️ a 4xx error, ⛔ a 5xx error or no response.
+- **Colours.** Successful calls are green with coloured JSON (keys, strings,
+  numbers); errors are red. On by default in Android logs and colour
+  terminals. iOS logs can't show colours, so they stay plain there.
+- **Whole responses.** Every line of every body is printed, however long.
+  Lines longer than 160 characters continue on the next line after `↪`,
+  because Android and iOS drop the end of a very long log line.
+- **Time.** Each block starts with the date and time
+  (`2026-11-17 15:35:30.519`); the call's duration reads `84 ms`, `1.24 s`
+  or `2 min 05 s`.
 - **Notes.** Retries (`↻ retry 2/3`), token refreshes (`🔑 token
   refreshed`) and cache hits are marked.
 - **Off in release builds.** Logging is turned off automatically in release

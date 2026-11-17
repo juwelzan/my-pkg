@@ -1,3 +1,22 @@
+## Unreleased
+
+- Logs print whole responses: no more `… N more lines` or
+  `… truncated` cuts. `LogOptions.maxLines` now defaults to `null` (every
+  line), and request/response bodies are no longer cut at 16,000
+  characters or summarised above 64 KB. Lines longer than
+  `maxLineLength` (now 160) continue on the next line after `↪` instead of
+  ending in `…`, so nothing is lost to the ~1000-byte line limit of the
+  Android and iOS logs.
+- Colours: successful calls are green with syntax-coloured JSON (keys,
+  strings, numbers, `true`/`false`/`null`); 4xx, 5xx and failures are red
+  (4xx used to be yellow). Automatic colours are now on in Android logs,
+  where `flutter run` and IDEs show them, and stay off on iOS.
+- Each block starts with the date and time (`2026-11-17 15:35:30.519`);
+  durations read `84 ms`, `1.24 s` or `2 min 05 s`.
+- The request body is pretty-printed like the response, and headers are
+  printed one per line.
+- `Redactor.body(maxChars:, maxBytes:)` accept `null` for no limit.
+
 ## 0.1.1
 
 - `enableLogging: true` now logs through the `logger` package (new

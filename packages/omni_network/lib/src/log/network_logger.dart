@@ -34,7 +34,6 @@ final class NetworkLogger {
   final bool logBodies;
 
   static const _tag = '[OmniNetwork';
-  static const _max = 16000;
 
   /// Logs an outgoing request.
   void request(int id, TransportRequest r) {
@@ -45,7 +44,12 @@ final class NetworkLogger {
         : r.bodyStream != null
         ? '<${r.contentLength ?? '?'} bytes, '
               '${r.headers['content-type'] ?? 'unknown type'}, not shown>'
-        : redactor.body(r.body, r.headers['content-type'], maxChars: _max);
+        : redactor.body(
+            r.body,
+            r.headers['content-type'],
+            maxChars: null, // whole body: logs never cut a response
+            maxBytes: null,
+          );
     final note = Zone.current[logNoteKey] as String?;
     _emit(
       NetworkLogRecord(
@@ -73,7 +77,8 @@ final class NetworkLogger {
         ? redactor.body(
             res.bodyBytes,
             res.headers['content-type'],
-            maxChars: _max,
+            maxChars: null,
+            maxBytes: null,
           )
         : null;
     final ms = res.duration.inMilliseconds;

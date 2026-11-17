@@ -233,7 +233,7 @@ void main() {
       },
     );
 
-    test('huge bodies are summarised in logs, not parsed', () async {
+    test('huge bodies are logged whole (redacted)', () async {
       final out = <String>[];
       final logged = OmniNetwork(
         baseUrl: 'https://h.io',
@@ -246,7 +246,9 @@ void main() {
       );
       addTearDown(logged.close);
       await logged.get<void>('/big');
-      expect(out.single, contains('too large to show'));
+      expect(out.single, isNot(contains('too large to show')));
+      expect(out.single, contains('"name": "item 0"'));
+      expect(out.single, contains('"name": "item 19999"'));
     });
   });
 

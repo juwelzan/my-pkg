@@ -85,7 +85,7 @@ final api = OmniNetwork(baseUrl: url, enableLogging: true);
 
 ```
 ┌───────────────────────────────────────────────────────────
-│ 15:35:30.519 (+0:00:00.022214)
+│ 2026-11-17 15:35:30.519
 ├┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 │ 💡 GET  https://api.example.com/v1/users/10
 │ 💡 🔑 token refreshed
@@ -97,10 +97,14 @@ final api = OmniNetwork(baseUrl: url, enableLogging: true);
 │ 💡 }
 └───────────────────────────────────────────────────────────
 ┌───────────────────────────────────────────────────────────
-│ 15:35:30.611 (+0:00:00.114580)
+│ 2026-11-17 15:35:30.611
 ├┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 │ ⚠️ POST https://api.example.com/v1/orders
-│ ⚠️ ⇢ body  {"item":7,"password":"***"}
+│ ⚠️ ⇢ body
+│ ⚠️   {
+│ ⚠️     "item": 7,
+│ ⚠️     "password": "***"
+│ ⚠️   }
 │ ⚠️ ✖ 422 Unprocessable Entity · 88 ms · 29 B
 │ ⚠️ {
 │ ⚠️   "error": "qty must be ≤ 1"
@@ -125,14 +129,25 @@ OmniNetwork(
 
 What each block shows:
 
-- **One block per call.** Method, URL, status, time, size and the
+- **One block per call.** Date and time, method, URL, the request body,
+  status, duration (`84 ms`, `1.24 s`, `2 min 05 s`), size and the
   pretty-printed JSON. Request and response are printed together, so
   concurrent calls never mix.
+- **Whole bodies.** Nothing is cut: every line of the request and
+  response body is printed. A line longer than `maxLineLength` (160)
+  continues on the next line after `↪`, because Android and iOS drop the
+  end of a log line longer than about 1000 bytes. Only binary bodies
+  (images, files) and JSON that cannot be parsed (so cannot be redacted)
+  are summarised by size.
 - **Retries and token refresh.** `↻ retry 2/3` and `🔑 token refreshed`
   lines; cache hits are marked `· cache`.
 - **Levels.** 💡 info for 2xx/3xx, ⚠️ warning for 4xx, ⛔ error for 5xx and
-  failures (timeouts, no connection), coloured when the terminal supports
-  it.
+  failures (timeouts, no connection).
+- **Colours.** Successful calls are green, with JSON keys, strings,
+  numbers and `true`/`false`/`null` in their own colours; 4xx, 5xx and
+  failures are red. Automatic: on in Android logs (`flutter run` and IDEs
+  show them) and in colour terminals, off on iOS, whose log would show the
+  codes as `\^[` text.
 - **Secrets.** Always `***`: auth and cookie headers, token, password and
   API-key fields, query values and URL user info. This cannot be turned off,
   only extended with `redactor: Redactor(extraKeys: {...})` from
@@ -151,9 +166,9 @@ OmniNetwork(
     headers: true,       // default false
     requestBody: true,   // default true
     responseBody: true,  // default true
-    maxLines: 30,        // then "… N more lines"
-    maxLineLength: 120,  // longer lines (long HTML/base64 values) end in "…"
-    colors: null,        // null = auto
+    maxLines: null,      // default null = every line; a number cuts with "… N more lines"
+    maxLineLength: 160,  // longer lines continue on the next line after "↪"
+    colors: null,        // null = auto (Android and colour terminals: on; iOS: off)
   ),
 );
 ```

@@ -25,7 +25,7 @@ final class Redactor {
   /// Replacement for masked values.
   static const mask = '***';
 
-  /// Bodies larger than this are summarised by size instead of shown.
+  /// Default [body] size limit: larger bodies are summarised by size.
   static const maxRedactedBytes = 64 * 1024;
 
   static const _headers = {
@@ -139,13 +139,19 @@ final class Redactor {
   ///
   /// JSON and form bodies are redacted; other `text/*` bodies are shown;
   /// anything else (binary, multipart, unknown) is summarised by size only.
-  /// Output is truncated to [maxChars].
-  String? body(List<int>? bytes, String? contentType, {int maxChars = 2000}) {
+  /// Output is truncated to [maxChars] characters, and bodies over
+  /// [maxBytes] are summarised by size without being parsed; `null` means
+  /// no limit (what `enableLogging` uses, so whole responses are printed).
+  String? body(
+    List<int>? bytes,
+    String? contentType, {
+    int? maxChars = 2000,
+    int? maxBytes = maxRedactedBytes,
+  }) {
     if (bytes == null || bytes.isEmpty) return null;
     final type = (contentType ?? '').toLowerCase();
-    // Redacting means parsing; never do that for huge bodies (slow, and a
-    // large blob is no use in a log anyway).
-    if (bytes.length > maxRedactedBytes) {
+    // Redacting means parsing; callers can refuse that for huge bodies.
+    if (maxBytes != null && bytes.length > maxBytes) {
       final label = type.isEmpty ? 'unknown type' : type;
       return '<${bytes.length} bytes, $label, too large to show>';
     }
@@ -165,7 +171,7 @@ final class Redactor {
       final label = type.isEmpty ? 'unknown type' : type;
       return '<${bytes.length} bytes, $label, not shown>';
     }
-    if (text.length > maxChars) {
+    if (maxChars != null && text.length > maxChars) {
       text =
           '${text.substring(0, maxChars)}… (${text.length} chars, truncated)';
     }

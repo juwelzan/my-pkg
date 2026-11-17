@@ -623,7 +623,7 @@ package দিয়ে ছাপা হয় — OmniRoute-এর navigation l
 
 ```
 ┌───────────────────────────────────────────────────────────
-│ 15:35:30.519 (+0:00:00.022214)
+│ 2026-11-17 15:35:30.519
 ├┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 │ 💡 GET  https://api.example.com/v1/users/10
 │ 💡 ✔ 200 OK · 3 ms · 43 B
@@ -634,10 +634,13 @@ package দিয়ে ছাপা হয় — OmniRoute-এর navigation l
 │ 💡 }
 └───────────────────────────────────────────────────────────
 ┌───────────────────────────────────────────────────────────
-│ 15:35:30.526 (+0:00:00.028918)
+│ 2026-11-17 15:35:30.526
 ├┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 │ ⚠️ POST https://api.example.com/v1/orders
-│ ⚠️ ⇢ body  {"qty":0}
+│ ⚠️ ⇢ body
+│ ⚠️   {
+│ ⚠️     "qty": 0
+│ ⚠️   }
 │ ⚠️ ✖ 422 Unprocessable Entity · 0 ms · 15 B
 │ ⚠️ {
 │ ⚠️   "error": "qty"
@@ -657,12 +660,21 @@ package দিয়ে ছাপা হয় — OmniRoute-এর navigation l
 | `↻ retry 2/3` | আবার চেষ্টা |
 | `🔑 token refreshed` | token refresh হয়েছে |
 | `· cache` | cache থেকে এসেছে |
-| `… N more lines` | বাকি লাইন কাটা হয়েছে (`maxLines`) |
-| `… (N chars, truncated)` | body খুব বড়, শুরুটা দেখানো হয়েছে |
+| `↪` | আগের লাইনেরই বাকি অংশ (লম্বা লাইন ভেঙে পরের লাইনে) |
+| `2026-11-17 15:35:30.519` | log-এর তারিখ আর সময় |
+| `84 ms` / `1.24 s` / `2 min 05 s` | call-এ কত সময় লেগেছে |
 
+- **পুরো response ছাপা হয়।** body যত বড়ই হোক, কোনো লাইন বাদ যায় না, অর্ধেক কাটা হয় না।
+  ১৬০ অক্ষরের বেশি লম্বা লাইন `↪` দিয়ে পরের লাইনে চলে যায় — কারণ Android আর iOS
+  একটা log লাইন প্রায় ১০০০ byte-এর বেশি হলে বাকিটা ফেলে দেয়।
+- শুধু binary body (ছবি, ফাইল) আর ভাঙা JSON (যেটা redact করা যায় না) size দিয়ে দেখানো হয়।
 - Request আর response একসাথে এক block-এ, তাই একসাথে অনেক call চললেও log মিশে যায় না।
-- JSON সুন্দরভাবে indent করা; বড় বা কাটা JSON-ও।
-- রং: terminal সমর্থন করলে আপনা থেকে; console-এ `[32m` জাতীয় লেখা দেখালে `LogOptions(colors: false)`।
+- JSON সুন্দরভাবে indent করা — request body-ও।
+- **রং:** সফল call সবুজ, JSON-এর key, string, number, `true/false/null` আলাদা রঙে;
+  4xx, 5xx আর ব্যর্থ call পুরোটা লাল।
+  Android-এ (`flutter run`, VS Code, Android Studio) আর রং-সমর্থিত terminal-এ নিজে থেকে চালু।
+  **iOS-এর log রং দেখাতে পারে না** (রং-এর code `\^[` লেখা হয়ে যায়), তাই iOS-এ রং বন্ধ থাকে —
+  তখন emoji (💡 ⚠️ ⛔) আর `✔`/`✖` দিয়ে বোঝা যায়।
 
 ### ১১.২ Secret কখনো log-এ যায় না
 
@@ -700,9 +712,9 @@ OmniNetwork(
     headers: true,       // default false
     requestBody: true,   // default true
     responseBody: true,  // default true
-    maxLines: 30,        // এর পরে "… N more lines"
-    maxLineLength: 120,  // এর চেয়ে লম্বা লাইন (base64, HTML) "…" দিয়ে শেষ
-    colors: null,        // null = আপনা থেকে বোঝে
+    maxLines: null,      // default null = সব লাইন; সংখ্যা দিলে "… N more lines" দিয়ে কাটে
+    maxLineLength: 160,  // এর চেয়ে লম্বা লাইন "↪" দিয়ে পরের লাইনে চলে যায়
+    colors: null,        // null = আপনা থেকে (Android/terminal: চালু, iOS: বন্ধ)
   ),
 );
 ```
@@ -1387,8 +1399,12 @@ exception লাগবে — শুধু debug build-এ রাখুন।
 `enableLogging: true` দিয়েছেন? Release/profile build-এ চলছে কি না দেখুন (`api.isLogging`)।
 নিজে `logSink` দিলে সেটা কোথায় লিখছে দেখুন।
 
-**iOS console-এ `[32m` জাতীয় লেখা দেখাচ্ছে।**
-`LogOptions(colors: false)` দিন — রং বন্ধ হয়ে যাবে।
+**iOS console-এ `\^[[32m` জাতীয় লেখা দেখাচ্ছে।**
+নিজে `LogOptions(colors: true)` দিয়েছেন — iOS-এর log রং দেখাতে পারে না। `colors` না দিলে (null) iOS-এ রং নিজে থেকেই বন্ধ থাকে।
+
+**Android-এ রং নেই।**
+`flutter run` terminal, VS Code বা Android Studio-তে দেখুন; `adb logcat` সরাসরি খুললে কিছু viewer রং দেখায় না।
+`colors: false` দেওয়া থাকলে সরিয়ে দিন।
 
 **`DecodeFailure` হচ্ছে।**
 Server-এর JSON আর `fromJson` মিলছে না (যেমন `id` string আসছে কিন্তু `as int`)। Log-এ body দেখুন;

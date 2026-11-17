@@ -70,7 +70,11 @@ void main() {
     expect(stable(out[0]), '''
 ┌────────────────────────────────────────────────────────────
 │ POST https://api.test/v1/orders
-│ ⇢ body  {"item":7,"password":"***"}
+│ ⇢ body
+│   {
+│     "item": 7,
+│     "password": "***"
+│   }
 ├────────────────────────────────────────────────────────────
 │ ✖ 422 Unprocessable Entity · N ms · 15 B
 │ {
@@ -88,16 +92,21 @@ void main() {
   });
 
   test(
-    'colours: green 2xx, yellow 4xx, red failures; plain text identical',
+    'colours: green 2xx, red 4xx and failures; plain text identical',
     () async {
       final api = client(options: const LogOptions(colors: true));
       addTearDown(api.close);
       await api.get<void>('/users/1');
       await api.post<void>('/orders').asResult();
       await api.get<void>('/down').asResult();
-      expect(out[0], contains('\x1B[32m✔ 200 OK'));
-      expect(out[1], contains('\x1B[33m✖ 422'));
-      expect(out[2], contains('\x1B[31m✖ ConnectionFailure'));
+      expect(out[0], contains('\x1B[1;38;5;40m✔ 200 OK'));
+      expect(out[1], contains('\x1B[1;38;5;196m✖ 422'));
+      expect(out[2], contains('\x1B[1;38;5;196m✖ ConnectionFailure'));
+      // Successful JSON is syntax-coloured: keys and numbers.
+      expect(out[0], contains('\x1B[38;5;81m"id"'));
+      expect(out[0], contains('\x1B[38;5;141m1'));
+      // A failed call stays red: its body is not syntax-coloured.
+      expect(out[1], isNot(contains('\x1B[38;5;81m"error"')));
       final noColor = <String>[];
       final api2 = OmniNetwork(
         baseUrl: 'https://api.test/v1',
@@ -130,9 +139,11 @@ void main() {
     }
     expect(
       all,
-      contains('⇢ headers  authorization: ***  accept: application/json'),
+      contains(
+        '│ ⇢ headers\n│   authorization: ***\n│   accept: application/json',
+      ),
     );
-    expect(all, contains('⇠ headers  content-type: application/json'));
+    expect(all, contains('│ ⇠ headers\n│   content-type: application/json'));
     expect(all, contains('api_key=***'));
   });
 

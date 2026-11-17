@@ -1484,7 +1484,7 @@ final api = OmniNetwork(baseUrl: url, enableLogging: true); // client তৈর�
 
 ```text
 ┌───────────────────────────────────────────────────────────
-│ 15:35:30.519 (+0:00:00.022214)
+│ 2026-11-17 15:35:30.519
 ├┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 │ 💡 GET  https://api.example.com/v1/users/10
 │ 💡 ✔ 200 OK · 3 ms · 43 B
@@ -1495,10 +1495,13 @@ final api = OmniNetwork(baseUrl: url, enableLogging: true); // client তৈর�
 │ 💡 }
 └───────────────────────────────────────────────────────────
 ┌───────────────────────────────────────────────────────────
-│ 15:35:30.526 (+0:00:00.028918)
+│ 2026-11-17 15:35:30.526
 ├┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 │ ⚠️ POST https://api.example.com/v1/orders
-│ ⚠️ ⇢ body  {"qty":0}
+│ ⚠️ ⇢ body
+│ ⚠️   {
+│ ⚠️     "qty": 0
+│ ⚠️   }
 │ ⚠️ ✖ 422 Unprocessable Entity · 0 ms · 15 B
 │ ⚠️ {
 │ ⚠️   "error": "qty"
@@ -1508,6 +1511,10 @@ final api = OmniNetwork(baseUrl: url, enableLogging: true); // client তৈর�
 
 - বাঁয়ের emoji দেখেই বোঝা যায়: 💡 সফল, ⚠️ 4xx (আপনার request-এ ভুল), ⛔ 5xx বা response নেই
   (timeout, internet নেই)
+- **পুরো response** ছাপা হয় — যত বড়ই হোক, কিছু কাটা হয় না; লম্বা লাইন `↪` দিয়ে পরের লাইনে
+- **রং:** সফল call সবুজ, JSON-এর key/string/number আলাদা রঙে; error লাল (Android আর terminal-এ;
+  iOS-এর log রং দেখাতে পারে না, সেখানে emoji দিয়ে বোঝা যায়)
+- উপরে তারিখ-সময় (`2026-11-17 15:35:30.519`), কত সময় লাগল: `84 ms`, `1.24 s`, `2 min 05 s`
 - password, token, cookie, API key সবসময় `***` — কখনো log-এ আসে না
 - retry (`↻ retry 2/3`), token refresh (`🔑 token refreshed`), cache hit চিহ্নিত
 - release build-এ নিজে থেকেই বন্ধ; log বন্ধ থাকলে network-এর আচরণ একটুও বদলায় না
