@@ -29,7 +29,7 @@ dependencies:
     git:
       url: https://github.com/juwelzan/omni_route.git
       path: packages/omni_network
-      ref: omni_network-v0.1.0
+      ref: omni_network-v0.1.1
 ```
 
 ```dart

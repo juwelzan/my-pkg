@@ -1,4 +1,4 @@
-## Unreleased
+## 0.1.1
 
 - `enableLogging: true` now logs through the `logger` package (new
   dependency `logger: ^2.8.0`), in the same format as OmniRoute's logs: a
