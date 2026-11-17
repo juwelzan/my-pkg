@@ -8,7 +8,7 @@ final api = OmniNetwork(baseUrl: 'https://api.example.com', enableLogging: true)
 final user = await api.get<User>('/users/10', decoder: User.fromJson);
 ```
 
-> Status: `0.1.0`, not on pub.dev yet. Depend on it from GitHub by tag.
+> Status: `0.1.1`, not on pub.dev yet. Depend on it from GitHub by tag.
 
 - [Start here](#start-here)
 - [Login and tokens](#login-and-tokens)
@@ -16,6 +16,7 @@ final user = await api.get<User>('/users/10', decoder: User.fromJson);
 - [Common tasks](#common-tasks)
 - [Safe by default](#safe-by-default)
 - [Full guide](doc/advanced.md)
+- [সম্পূর্ণ গাইড — বাংলা](doc/guide.bn.md)
 
 ---
 

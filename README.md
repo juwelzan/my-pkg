@@ -1230,6 +1230,8 @@ flutter test            # পুরো flow-এর test
 OmniNetwork হলো এই repo-র **আলাদা** networking package — OmniRoute ছাড়াও একা ব্যবহার করা যায়
 (Flutter বা কোনো state management লাগে না)। ভিতরে HTTP-র কাজ করে [Dio](https://pub.dev/packages/dio)।
 
+> **সম্পূর্ণ ব্যবহার গাইড (বাংলা):** [packages/omni_network/doc/guide.bn.md](packages/omni_network/doc/guide.bn.md) — install থেকে production পর্যন্ত, OmniRoute-এর সাথে পুরো অ্যাপ, test, নিরাপত্তা আর FAQ।
+
 | Package | কী কাজে | কখন লাগবে |
 |---|---|---|
 | `omni_network` | HTTP client — get/post, typed model, auth, retry, cache, upload/download, pagination | সবসময় |
